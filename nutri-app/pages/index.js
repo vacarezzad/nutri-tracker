@@ -47,6 +47,36 @@ function heatColor(value,goal,colors) {
   const r=value/goal
   if(r<0.5)return colors[0]; if(r<0.75)return colors[1]; if(r<0.9)return colors[2]; if(r<1.1)return colors[3]; return colors[4]
 }
+function getWeekBuckets(year,month) {
+  const dim=getDaysInMonth(year,month),weeks=[]
+  let s=1
+  while(s<=dim){ const e=Math.min(s+6,dim); weeks.push({label:`Sem ${weeks.length+1}`,start:s,end:e}); s+=7 }
+  return weeks
+}
+function getWeekDayAvg(dayMap,year,month,start,end,macroKey) {
+  const vals=[]
+  for(let d=start;d<=end;d++){
+    const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+    const v=getDayTotals(dayMap,ds)[macroKey]||0
+    if(v>0)vals.push(v)
+  }
+  return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0
+}
+function getMealMonthAvgs(dayMap,year,month) {
+  const dim=getDaysInMonth(year,month)
+  return MEALS.map(meal=>{
+    const rows=[]
+    for(let d=1;d<=dim;d++){
+      const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+      const md=dayMap[ds]?.[meal.key]
+      if(md)rows.push(md)
+    }
+    const n=rows.length
+    if(!n)return{...meal,count:0,avgs:{}}
+    const avgs=MACROS.reduce((acc,m)=>{ acc[m.key]=Math.round(rows.reduce((s,r)=>s+(Number(r[m.key])||0),0)/n); return acc },{})
+    return{...meal,count:n,avgs}
+  })
+}
 
 function LineChart({series,goal,color}) {
   const W=280,H=75,PAD=6
@@ -68,6 +98,29 @@ function LineChart({series,goal,color}) {
       <line x1={0} y1={avgY} x2={W} y2={avgY} stroke={color} strokeWidth={1} strokeDasharray="7,4" opacity={0.55}/>
       {series.map((s,i)=>{ const x=toX(i),y=toY(s.value),isT=s.date===today; return s.value>0?(<g key={i}>{isT?<><circle cx={x} cy={y} r={5} fill="white" stroke={color} strokeWidth={2}/><circle cx={x} cy={y} r={2} fill={color}/></>:<circle cx={x} cy={y} r={3} fill={color}/>}</g>):null })}
       {series.map((s,i)=><text key={i} x={toX(i)} y={H+13} textAnchor="middle" fontSize={8} fill={s.date===today?color:'#bbb'} fontWeight={s.date===today?'600':'400'}>{dayLbls[new Date(s.date+'T12:00:00').getDay()]}</text>)}
+    </svg>
+  )
+}
+
+function WeekBarChart({weeks,goal,color,unit}) {
+  const W=280,H=80,PAD=8,n=weeks.length
+  const maxVal=Math.max(...weeks.map(w=>w.value),goal*1.1,1)
+  const toY=v=>PAD+(H-PAD*2)*(1-v/maxVal)
+  const goalY=toY(goal)
+  const slotW=(W-PAD*2)/n
+  const barW=Math.min(slotW*0.62,38)
+  return (
+    <svg viewBox={`0 0 ${W} ${H+20}`} style={{width:'100%',overflow:'visible'}}>
+      <line x1={PAD} y1={goalY} x2={W-PAD} y2={goalY} stroke={color} strokeWidth={0.8} strokeDasharray="4,3" opacity={0.35}/>
+      {weeks.map((w,i)=>{
+        const cx=PAD+slotW*i+slotW/2,barH=w.value>0?(H-PAD*2)*(w.value/maxVal):0,y=toY(w.value)
+        return(<g key={i}>
+          <rect x={cx-barW/2} y={w.value>0?y:H-PAD} width={barW} height={barH>0?barH:2} rx={4} fill={w.value>0?color:'#f0f0f0'} opacity={w.value>0?0.85:1}/>
+          {w.value>0&&<text x={cx} y={y-4} textAnchor="middle" fontSize={8} fill={color} fontWeight="600">{w.value}</text>}
+          <text x={cx} y={H+14} textAnchor="middle" fontSize={9} fill="#aaa">{w.label}</text>
+        </g>)
+      })}
+      <text x={W-PAD} y={goalY-3} textAnchor="end" fontSize={8} fill={color} opacity={0.55}>obj {goal}{unit}</text>
     </svg>
   )
 }
@@ -136,6 +189,7 @@ export default function Home() {
     }).filter(v=>v>0)
     return{...m,avg:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0}
   })
+  const mealAvgs=getMealMonthAvgs(dayMap,heatYear,heatMonth)
 
   if(loading)return(
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#0f0f1a',fontFamily:'system-ui'}}>
@@ -285,23 +339,60 @@ export default function Home() {
               </div>)
             })}
           </div>
-          <div style={{display:'flex',justifyContent:'flex-end',alignItems:'center',gap:'6px',marginBottom:'12px'}}>
-            <span style={{fontSize:'9px',color:'#bbb'}}>Bajo</span>
-            {MACROS[0].heatColors.map((c,i)=><div key={i} style={{width:'13px',height:'13px',borderRadius:'3px',background:c}}/>)}
-            <span style={{fontSize:'9px',color:'#bbb'}}>≥ Obj</span>
+          <div style={{marginBottom:'16px'}}>
+            <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'10px'}}>📊 Evolución semanal — promedio diario por semana</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:'12px'}}>
+              {MACROS.filter(m=>m.key!=='fiber').map(m=>{
+                const goal=goals[m.goalKey]||DEFAULT_GOALS[m.goalKey]
+                const avg=monthAvgs.find(x=>x.key===m.key)?.avg||0,dev=avg-goal
+                const weeks=getWeekBuckets(heatYear,heatMonth).map(w=>({...w,value:getWeekDayAvg(dayMap,heatYear,heatMonth,w.start,w.end,m.key)}))
+                return(<div key={m.key} style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'6px'}}>
+                    <div style={{fontSize:'12px',fontWeight:'600',color:m.color}}>{m.label}</div>
+                    <div style={{fontSize:'10px',color:'#bbb'}}>Prom: <span style={{color:m.color,fontWeight:'600'}}>{avg||'—'}{m.unit}</span>{avg>0&&<span style={{color:Math.abs(dev)<goal*0.1?'#1D9E75':m.color,marginLeft:'6px',fontWeight:'500'}}>{dev>=0?`+${Math.round(dev)}`:`${Math.round(dev)}`}{m.unit}</span>}</div>
+                  </div>
+                  <WeekBarChart weeks={weeks} goal={goal} color={m.color} unit={m.unit}/>
+                  <div style={{display:'flex',alignItems:'center',gap:'4px',marginTop:'2px'}}>
+                    <div style={{width:'14px',height:'0',borderTop:`1.5px dashed ${m.color}`,opacity:0.4}}/>
+                    <span style={{fontSize:'9px',color:'#bbb'}}>Objetivo diario</span>
+                  </div>
+                </div>)
+              })}
+            </div>
           </div>
-          <div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:'12px'}}>
-            {MACROS.filter(m=>m.key!=='fiber').map(m=>{
-              const avg=monthAvgs.find(x=>x.key===m.key)?.avg||0,goal=goals[m.goalKey]||DEFAULT_GOALS[m.goalKey],dev=avg-goal
-              return(<div key={m.key} style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px'}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'10px'}}>
-                  <div style={{fontSize:'12px',fontWeight:'600',color:m.color}}>{m.label}</div>
-                  <div style={{fontSize:'10px',color:'#bbb'}}>Prom: <span style={{color:m.color,fontWeight:'600'}}>{avg||'—'}{m.unit}</span>{avg>0&&<span style={{color:Math.abs(dev)<goal*0.1?'#1D9E75':m.color,marginLeft:'6px',fontWeight:'500'}}>{dev>=0?`+${Math.round(dev)}`:`${Math.round(dev)}`}{m.unit}</span>}</div>
-                </div>
-                <Heatmap macro={m} dayMap={dayMap} goals={goals} year={heatYear} month={heatMonth}/>
-                <div style={{fontSize:'9px',color:'#bbb',marginTop:'6px'}}>Más oscuro = más cerca del objetivo · borde = hoy</div>
-              </div>)
-            })}
+          <div>
+            <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'10px'}}>🍽 Promedio mensual por comida</div>
+            <div style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px'}}>
+              <div style={{overflowX:'auto'}}>
+                <table style={{width:'100%',borderCollapse:'collapse',fontSize:'11px',minWidth:'520px'}}>
+                  <thead>
+                    <tr style={{borderBottom:'0.5px solid #e8e8e8'}}>
+                      <th style={{padding:'7px 8px',textAlign:'left',color:'#aaa',fontWeight:'600'}}>Comida</th>
+                      <th style={{padding:'7px 8px',textAlign:'center',color:'#aaa',fontWeight:'600'}}>Días</th>
+                      {MACROS.map(m=><th key={m.key} style={{padding:'7px 8px',textAlign:'center',color:m.color,fontWeight:'600'}}>{m.label}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mealAvgs.map((meal,i)=>(
+                      <tr key={meal.key} style={{background:i%2===0?'white':'#fafafa',borderBottom:'0.5px solid #f0f0f0'}}>
+                        <td style={{padding:'8px'}}>
+                          <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                            <div style={{width:'22px',height:'22px',borderRadius:'6px',background:meal.color+'18',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'12px'}}>{meal.icon}</div>
+                            <span style={{fontWeight:'500',color:'#444'}}>{meal.label}</span>
+                          </div>
+                        </td>
+                        <td style={{padding:'8px',textAlign:'center',color:'#bbb',fontSize:'10px'}}>{meal.count>0?`${meal.count}d`:'—'}</td>
+                        {MACROS.map(m=>(
+                          <td key={m.key} style={{padding:'8px',textAlign:'center',fontWeight:meal.count>0?'500':'400',color:meal.count>0?m.color:'#ddd'}}>
+                            {meal.count>0?`${meal.avgs[m.key]}${m.unit}`:'—'}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </>}
       </div>
