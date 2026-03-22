@@ -110,6 +110,69 @@ function getMealMonthAvgs(dayMap,year,month) {
     return{...meal,count:n,avgs}
   })
 }
+function calcDayScore(totals,microTotals,goals) {
+  const hasMacros=MACROS.some(m=>(totals[m.key]||0)>0)
+  if(!hasMacros)return null
+  const macroScores=MACROS.map(m=>{
+    const val=totals[m.key]||0,goal=goals[m.goalKey]||DEFAULT_GOALS[m.goalKey]
+    if(!val)return 0
+    if(m.key==='fiber'){const r=val/goal;return r>=1?1:r>=0.8?0.8:r>=0.6?0.5:r*0.5}
+    const dev=Math.abs(val/goal-1)
+    return dev<=0.1?1:dev<=0.2?0.8:dev<=0.3?0.6:dev<=0.5?0.3:0.1
+  })
+  const macroScore=macroScores.reduce((a,b)=>a+b,0)/MACROS.length*70
+  const hasMicros=MICROS.some(m=>(microTotals[m.key]||0)>0)
+  const microScores=MICROS.map(m=>{
+    const val=microTotals[m.key]||0
+    if(!val)return hasMicros?0:0.5
+    const r=val/m.goal
+    if(m.type==='max')return r<=0.75?1:r<=0.9?0.8:r<=1?0.5:Math.max(0,1-(r-1))
+    if(m.type==='min')return r>=1?1:r>=0.75?0.7:r*0.7
+    const dev=Math.abs(r-1);return dev<=0.1?1:dev<=0.25?0.75:dev<=0.5?0.5:0.2
+  })
+  const microScore=microScores.reduce((a,b)=>a+b,0)/MICROS.length*30
+  return Math.round(macroScore+microScore)
+}
+function scoreGrade(score) {
+  if(score>=90)return{grade:'A',color:'#1D9E75'}
+  if(score>=75)return{grade:'B',color:'#059669'}
+  if(score>=60)return{grade:'C',color:'#EF9F27'}
+  if(score>=45)return{grade:'D',color:'#F97316'}
+  return{grade:'F',color:'#E24B4A'}
+}
+function calcStreak(dayMap) {
+  const d=new Date()
+  const ts=d.toISOString().split('T')[0]
+  if(!dayMap[ts]||!Object.keys(dayMap[ts]).length)d.setDate(d.getDate()-1)
+  let streak=0
+  for(let i=0;i<365;i++){
+    const ds=d.toISOString().split('T')[0]
+    if(dayMap[ds]&&Object.keys(dayMap[ds]).length>0){streak++;d.setDate(d.getDate()-1)}
+    else break
+  }
+  return streak
+}
+function getPeriodWeeks(dayMap,days) {
+  const dates=Array.from({length:days},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(days-1-i));return d.toISOString().split('T')[0]})
+  const weeks=[]
+  for(let i=0;i<dates.length;i+=7){
+    const chunk=dates.slice(i,i+7)
+    const logged=chunk.filter(d=>dayMap[d]&&Object.keys(dayMap[d]).length>0).length
+    weeks.push({label:`S${weeks.length+1}`,dates:chunk,logged,total:chunk.length})
+  }
+  return weeks
+}
+function getPeriodWeekMacro(dayMap,periodWeeks,macroKey) {
+  return periodWeeks.map(w=>({
+    ...w,
+    value:(()=>{const vals=w.dates.map(d=>getDayTotals(dayMap,d)[macroKey]||0).filter(v=>v>0);return vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0})()
+  }))
+}
+function getPeriodAdherence(dayMap,days) {
+  let logged=0
+  for(let i=0;i<days;i++){const d=new Date();d.setDate(d.getDate()-i);const ds=d.toISOString().split('T')[0];if(dayMap[ds]&&Object.keys(dayMap[ds]).length>0)logged++}
+  return Math.round((logged/days)*100)
+}
 
 function MicrosGrid({microTotals}) {
   return (
@@ -253,6 +316,33 @@ function Heatmap({macro,dayMap,goals,year,month}) {
   )
 }
 
+function TrendLineChart({weeks,goal,color,unit}) {
+  const W=280,H=75,PAD=10
+  const vals=weeks.map(w=>w.value)
+  const max=Math.max(...vals,goal*1.1,1)
+  const toY=v=>PAD+(H-PAD*2)*(1-v/max)
+  const n=weeks.length
+  const toX=i=>PAD+(n<2?0:i/(n-1))*(W-PAD*2)
+  const goalY=toY(goal)
+  const pts=weeks.filter(w=>w.value>0).length>1
+    ?weeks.map((w,i)=>w.value>0?`${toX(i)},${toY(w.value)}`:null).filter(Boolean).join(' ')
+    :''
+  return (
+    <svg viewBox={`0 0 ${W} ${H+20}`} style={{width:'100%',overflow:'visible'}}>
+      <line x1={PAD} y1={goalY} x2={W-PAD} y2={goalY} stroke={color} strokeWidth={0.8} strokeDasharray="4,3" opacity={0.35}/>
+      {pts&&<polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" opacity={0.85}/>}
+      {weeks.map((w,i)=>w.value>0?(
+        <g key={i}>
+          <circle cx={toX(i)} cy={toY(w.value)} r={3.5} fill="white" stroke={color} strokeWidth={2}/>
+          <text x={toX(i)} y={toY(w.value)-8} textAnchor="middle" fontSize={8} fill={color} fontWeight="600">{w.value}</text>
+        </g>
+      ):null)}
+      {weeks.map((w,i)=><text key={i} x={toX(i)} y={H+14} textAnchor="middle" fontSize={9} fill="#aaa">{w.label}</text>)}
+      <text x={W-PAD} y={goalY-3} textAnchor="end" fontSize={8} fill={color} opacity={0.55}>obj {goal}{unit}</text>
+    </svg>
+  )
+}
+
 export default function Home() {
   const [rawMeals,setRawMeals]=useState([])
   const [goals,setGoals]=useState(DEFAULT_GOALS)
@@ -260,6 +350,7 @@ export default function Home() {
   const [tab,setTab]=useState('hoy')
   const [selectedDate,setSelectedDate]=useState(todayStr())
   const [monthOffset,setMonthOffset]=useState(0)
+  const [tendPeriod,setTendPeriod]=useState(30)
 
   const fetchData=async()=>{
     try{
@@ -280,6 +371,10 @@ export default function Home() {
   const today=todayStr(),last7=getLast7(),dayMap=buildDayMap(rawMeals)
   const dayMeals=dayMap[selectedDate]||{},totals=getDayTotals(dayMap,selectedDate)
   const microTotals=getDayMicroTotals(dayMap,selectedDate)
+  const dayScore=calcDayScore(totals,microTotals,goals)
+  const streak=calcStreak(dayMap)
+  const periodWeeks=getPeriodWeeks(dayMap,tendPeriod)
+  const periodAdherence=getPeriodAdherence(dayMap,tendPeriod)
 
   const now=new Date()
   const heatMonth=((now.getMonth()+monthOffset)%12+12)%12
@@ -331,11 +426,20 @@ export default function Home() {
               <div style={{fontSize:'20px',fontWeight:'600'}}>🥗 Nutri Tracker</div>
               <div style={{fontSize:'12px',opacity:0.5,marginTop:'2px'}}>{new Date().toLocaleDateString('es-AR',{weekday:'long',day:'numeric',month:'long'})}</div>
             </div>
-            <button onClick={fetchData} style={{background:'rgba(255,255,255,0.1)',border:'none',color:'white',padding:'6px 14px',borderRadius:'8px',cursor:'pointer',fontSize:'12px',fontFamily:'inherit'}}>↻ Actualizar</button>
+            <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+              {streak>0&&(
+                <div style={{display:'flex',alignItems:'center',gap:'5px',background:'rgba(255,180,0,0.15)',border:'1px solid rgba(255,180,0,0.3)',borderRadius:'20px',padding:'4px 12px'}}>
+                  <span style={{fontSize:'14px'}}>🔥</span>
+                  <span style={{fontSize:'12px',fontWeight:'600',color:'#FFB400'}}>{streak}d</span>
+                  <span style={{fontSize:'10px',color:'rgba(255,180,0,0.7)'}}>racha</span>
+                </div>
+              )}
+              <button onClick={fetchData} style={{background:'rgba(255,255,255,0.1)',border:'none',color:'white',padding:'6px 14px',borderRadius:'8px',cursor:'pointer',fontSize:'12px',fontFamily:'inherit'}}>↻ Actualizar</button>
+            </div>
           </div>
           <div style={{display:'flex',gap:'4px'}}>
-            {[{id:'hoy',label:'Hoy'},{id:'semana',label:'Semana'},{id:'mes',label:'Mes'}].map(t=>(
-              <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:'10px 20px',border:'none',cursor:'pointer',fontFamily:'inherit',fontSize:'13px',fontWeight:'500',borderRadius:'8px 8px 0 0',background:tab===t.id?'#f8f9fc':'transparent',color:tab===t.id?'#1a1a2e':'rgba(255,255,255,0.5)'}}>{t.label}</button>
+            {[{id:'hoy',label:'Hoy'},{id:'semana',label:'Semana'},{id:'mes',label:'Mes'},{id:'tendencias',label:'Tendencias'}].map(t=>(
+              <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:'10px 18px',border:'none',cursor:'pointer',fontFamily:'inherit',fontSize:'13px',fontWeight:'500',borderRadius:'8px 8px 0 0',background:tab===t.id?'#f8f9fc':'transparent',color:tab===t.id?'#1a1a2e':'rgba(255,255,255,0.5)'}}>{t.label}</button>
             ))}
           </div>
         </div>
@@ -352,6 +456,32 @@ export default function Home() {
               </button>)
             })}
           </div>
+
+          {/* Score nutricional */}
+          {dayScore!==null&&(()=>{const sg=scoreGrade(dayScore);return(
+            <div style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px 16px',marginBottom:'14px',display:'flex',alignItems:'center',gap:'16px'}}>
+              <div style={{position:'relative',width:'60px',height:'60px',flexShrink:0}}>
+                <svg width="60" height="60" viewBox="0 0 60 60">
+                  <circle cx="30" cy="30" r="25" fill="none" stroke="#f0f0f0" strokeWidth="6"/>
+                  <circle cx="30" cy="30" r="25" fill="none" stroke={sg.color} strokeWidth="6"
+                    strokeDasharray={`${(dayScore/100)*2*Math.PI*25} ${2*Math.PI*25}`}
+                    strokeLinecap="round" transform="rotate(-90 30 30)" style={{transition:'stroke-dasharray 0.8s ease'}}/>
+                  <text x="30" y="34" textAnchor="middle" fontSize="14" fontWeight="700" fill={sg.color}>{sg.grade}</text>
+                </svg>
+              </div>
+              <div style={{flex:1}}>
+                <div style={{fontSize:'13px',fontWeight:'600',color:'#1a1a2e',marginBottom:'2px'}}>Score nutricional del día</div>
+                <div style={{display:'flex',alignItems:'baseline',gap:'6px',marginBottom:'6px'}}>
+                  <div style={{fontSize:'28px',fontWeight:'700',color:sg.color,lineHeight:1}}>{dayScore}</div>
+                  <div style={{fontSize:'12px',color:'#bbb'}}>/100</div>
+                </div>
+                <div style={{background:'#f0f0f0',borderRadius:'6px',height:'5px'}}>
+                  <div style={{background:sg.color,borderRadius:'6px',height:'5px',width:`${dayScore}%`,transition:'width 0.8s ease'}}/>
+                </div>
+                <div style={{fontSize:'10px',color:'#aaa',marginTop:'4px'}}>Macros 70% · Micros 30%</div>
+              </div>
+            </div>
+          )})()}
 
           {/* Macros */}
           <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'8px'}}>💊 Macros</div>
@@ -523,6 +653,87 @@ export default function Home() {
             </div>
           </div>
           <MicrosSummary microAvgs={monthMicroAvgs} label="Promedio mensual — micros"/>
+        </>}
+
+        {tab==='tendencias'&&<>
+          {/* Period selector */}
+          <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'16px'}}>
+            <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginRight:'4px'}}>📈 Período:</div>
+            {[30,60,90].map(p=>(
+              <button key={p} onClick={()=>setTendPeriod(p)} style={{padding:'6px 16px',borderRadius:'20px',fontFamily:'inherit',border:`1.5px solid ${tendPeriod===p?'#1a1a2e':'#e0e0e0'}`,background:tendPeriod===p?'#1a1a2e':'white',color:tendPeriod===p?'white':'#666',cursor:'pointer',fontSize:'12px',fontWeight:'500'}}>{p}d</button>
+            ))}
+          </div>
+
+          {/* Stats row */}
+          <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px',marginBottom:'16px'}}>
+            {[
+              {icon:'📅',label:'Días registrados',value:`${periodWeeks.reduce((a,w)=>a+w.logged,0)}/${tendPeriod}`,color:'#378ADD'},
+              {icon:'✅',label:'Adherencia',value:`${periodAdherence}%`,color:periodAdherence>=80?'#1D9E75':periodAdherence>=60?'#EF9F27':'#E24B4A'},
+              {icon:'📆',label:'Semanas',value:`${periodWeeks.length}`,color:'#7F77DD'},
+            ].map(s=>(
+              <div key={s.label} style={{background:'white',borderRadius:'12px',border:'0.5px solid #e8e8e8',padding:'12px',textAlign:'center'}}>
+                <div style={{fontSize:'18px',marginBottom:'4px'}}>{s.icon}</div>
+                <div style={{fontSize:'18px',fontWeight:'700',color:s.color}}>{s.value}</div>
+                <div style={{fontSize:'9px',color:'#aaa',marginTop:'2px'}}>{s.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Macro trend charts */}
+          <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'10px'}}>Evolución semanal — promedio diario por semana</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:'12px'}}>
+            {MACROS.filter(m=>m.key!=='fiber').map(m=>{
+              const goal=goals[m.goalKey]||DEFAULT_GOALS[m.goalKey]
+              const weeks=getPeriodWeekMacro(dayMap,periodWeeks,m.key)
+              const validVals=weeks.filter(w=>w.value>0).map(w=>w.value)
+              const avg=validVals.length?Math.round(validVals.reduce((a,b)=>a+b,0)/validVals.length):0
+              const dev=avg-goal
+              const trend=validVals.length>=2?(validVals[validVals.length-1]-validVals[0]>0?'↑':'↓'):'—'
+              return(
+                <div key={m.key} style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px'}}>
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'2px'}}>
+                    <div style={{fontSize:'12px',fontWeight:'600',color:m.color}}>{m.label}</div>
+                    <div style={{fontSize:'11px',fontWeight:'600',color:'#ccc'}}>{trend}</div>
+                  </div>
+                  <div style={{display:'flex',alignItems:'baseline',gap:'6px',marginBottom:'8px'}}>
+                    <div style={{fontSize:'20px',fontWeight:'600',color:m.color}}>{avg||'—'}</div>
+                    {avg>0&&<><div style={{fontSize:'11px',color:'#bbb'}}>{m.unit} prom.</div>
+                    <div style={{fontSize:'10px',color:Math.abs(dev)<goal*0.1?'#1D9E75':m.color,fontWeight:'500'}}>{dev>=0?`+${Math.round(dev)}`:`${Math.round(dev)}`}{m.unit}</div></>}
+                  </div>
+                  <TrendLineChart weeks={weeks} goal={goal} color={m.color} unit={m.unit}/>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Micros trend summary */}
+          <div style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px',marginTop:'12px'}}>
+            <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'12px'}}>🔬 Promedio de micros — últimos {tendPeriod}d</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:'8px'}}>
+              {MICROS.map(m=>{
+                const vals=periodWeeks.flatMap(w=>w.dates.map(d=>getDayMicroTotals(dayMap,d)[m.key]||0)).filter(v=>v>0)
+                const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0
+                const sc=microStatusColor(avg,m.goal,m.type)
+                const pct=avg>0?Math.min(Math.round((avg/m.goal)*100),150):0
+                const typeLabel=m.type==='max'?'límite':m.type==='min'?'mínimo':'objetivo'
+                return(
+                  <div key={m.key} style={{background:'#fafafa',borderRadius:'10px',border:'0.5px solid #f0f0f0',padding:'10px'}}>
+                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'4px'}}>
+                      <div style={{fontSize:'10px',fontWeight:'600',color:'#555'}}>{m.label}</div>
+                      <div style={{fontSize:'9px',color:'#bbb'}}>{m.goal}{m.unit}</div>
+                    </div>
+                    <div style={{fontSize:'16px',fontWeight:'600',color:avg>0?sc:'#ccc',lineHeight:1,marginBottom:'5px'}}>
+                      {avg>0?avg:'—'}<span style={{fontSize:'10px',fontWeight:'400',color:'#bbb'}}> {m.unit}</span>
+                    </div>
+                    <div style={{background:'#e8e8e8',borderRadius:'4px',height:'3px'}}>
+                      <div style={{background:avg>0?sc:'#e8e8e8',borderRadius:'4px',height:'3px',width:`${Math.min((avg/m.goal)*100,100)}%`,transition:'width 0.6s ease'}}/>
+                    </div>
+                    <div style={{fontSize:'9px',color:avg>0?sc:'#ccc',marginTop:'3px',fontWeight:'500'}}>{avg>0?`${pct}% del ${typeLabel}`:'Sin datos'}</div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </>}
       </div>
     </div>
