@@ -406,8 +406,8 @@ function WorkoutCard({fitnessRow,selectedDate,onSave}) {
         style={{width:'100%',border:'0.5px solid #e0e0e0',borderRadius:'8px',padding:'7px 10px',fontSize:'11px',fontFamily:'inherit',marginBottom:'8px',boxSizing:'border-box',outline:'none',color:'#333'}}/>
       <div style={{display:'flex',gap:'8px',alignItems:'center',marginBottom:'10px'}}>
         <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
-          <input type="number" value={minutes} onChange={e=>setMinutes(e.target.value)} placeholder="0" min="0"
-            style={{width:'64px',border:'0.5px solid #e0e0e0',borderRadius:'8px',padding:'7px 10px',fontSize:'12px',fontFamily:'inherit',outline:'none',textAlign:'center'}}/>
+          <input type="text" inputMode="numeric" value={minutes} onChange={e=>setMinutes(e.target.value.replace(/\D/g,''))} placeholder="0"
+            style={{width:'64px',border:'0.5px solid #e0e0e0',borderRadius:'8px',padding:'7px 10px',fontSize:'12px',fontFamily:'inherit',outline:'none',textAlign:'center',appearance:'textfield',MozAppearance:'textfield',WebkitAppearance:'none'}}/>
           <span style={{fontSize:'11px',color:'#bbb'}}>min</span>
         </div>
         <div style={{display:'flex',gap:'4px',flex:1}}>
@@ -419,9 +419,16 @@ function WorkoutCard({fitnessRow,selectedDate,onSave}) {
         </div>
       </div>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <div style={{fontSize:'11px',color:'#aaa'}}>
-          Estimado: <span style={{fontWeight:'600',color:estCal>0?intCfg?.color:'#ccc'}}>{estCal>0?`~${estCal} kcal`:'—'}</span>
-          {estCal>0&&<span style={{color:'#bbb',fontSize:'10px'}}> ({intCfg?.kcalPerMin} kcal/min)</span>}
+        <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+          {estCal>0?(
+            <div style={{background:intCfg?.color+'18',border:`1px solid ${intCfg?.color}44`,borderRadius:'8px',padding:'5px 10px',display:'flex',alignItems:'baseline',gap:'4px'}}>
+              <span style={{fontSize:'15px',fontWeight:'700',color:intCfg?.color}}>~{estCal}</span>
+              <span style={{fontSize:'10px',fontWeight:'500',color:intCfg?.color+'bb'}}>kcal quemadas</span>
+            </div>
+          ):(
+            <div style={{fontSize:'11px',color:'#ccc'}}>Ingresá minutos para ver estimación</div>
+          )}
+          {estCal>0&&<span style={{fontSize:'10px',color:'#ccc'}}>({intCfg?.kcalPerMin} kcal/min)</span>}
         </div>
         <button onClick={save} disabled={!canSave} style={{padding:'7px 18px',borderRadius:'8px',border:'none',background:canSave?'#1a1a2e':'#f0f0f0',color:canSave?'white':'#bbb',cursor:canSave?'pointer':'default',fontSize:'11px',fontWeight:'500',fontFamily:'inherit'}}>
           {saving?'Guardando...':'Guardar'}
@@ -431,33 +438,80 @@ function WorkoutCard({fitnessRow,selectedDate,onSave}) {
   )
 }
 
-function StepsCard({steps,goal,burned}) {
+function StepsCard({steps,goal,fitnessRow,selectedDate,onSave}) {
+  const [input,setInput]=useState(steps>0?String(steps):'')
+  const [saving,setSaving]=useState(false)
+
+  useEffect(()=>{setInput(steps>0?String(steps):'')},[selectedDate,steps])
+
   const pct=steps>0?Math.min((steps/goal)*100,100):0
   const r=22,circ=2*Math.PI*r,dash=(pct/100)*circ
   const color=pct>=100?'#1D9E75':pct>=70?'#EF9F27':'#378ADD'
   const remaining=Math.max(goal-steps,0)
+  const burned=estimateStepCal(steps)
+  const previewBurned=estimateStepCal(Number(input)||0)
+  const canSave=Number(input)>=0&&String(Number(input))===input.trim()&&!saving
+
+  const save=async()=>{
+    if(!canSave)return
+    setSaving(true)
+    try{
+      await fetch(SUPABASE_FN,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          secret:'nutri2024diego',type:'steps',date:selectedDate,
+          steps:Number(input),steps_goal:fitnessRow?.steps_goal||goal,
+          workout_minutes:fitnessRow?.workout_minutes||0,
+          workout_intensity:fitnessRow?.workout_intensity||null,
+          workout_type:fitnessRow?.workout_type||null
+        })
+      })
+      await onSave()
+    }catch(e){}
+    setSaving(false)
+  }
+
   return(
-    <div style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px 16px',marginBottom:'14px',display:'flex',alignItems:'center',gap:'16px'}}>
-      <div style={{position:'relative',width:'52px',height:'52px',flexShrink:0}}>
-        <svg width="52" height="52" viewBox="0 0 52 52">
-          <circle cx="26" cy="26" r={r} fill="none" stroke="#f0f0f0" strokeWidth="5"/>
-          <circle cx="26" cy="26" r={r} fill="none" stroke={steps>0?color:'#f0f0f0'} strokeWidth="5"
-            strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" transform="rotate(-90 26 26)"
-            style={{transition:'stroke-dasharray 0.8s ease'}}/>
-        </svg>
-        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'18px'}}>👟</div>
+    <div style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px 16px',marginBottom:'14px'}}>
+      <div style={{display:'flex',alignItems:'center',gap:'16px'}}>
+        <div style={{position:'relative',width:'52px',height:'52px',flexShrink:0}}>
+          <svg width="52" height="52" viewBox="0 0 52 52">
+            <circle cx="26" cy="26" r={r} fill="none" stroke="#f0f0f0" strokeWidth="5"/>
+            <circle cx="26" cy="26" r={r} fill="none" stroke={steps>0?color:'#f0f0f0'} strokeWidth="5"
+              strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" transform="rotate(-90 26 26)"
+              style={{transition:'stroke-dasharray 0.8s ease'}}/>
+          </svg>
+          <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'18px'}}>👟</div>
+        </div>
+        <div style={{flex:1}}>
+          <div style={{fontSize:'13px',fontWeight:'600',color:'#1a1a2e',marginBottom:'2px'}}>Pasos del día</div>
+          <div style={{display:'flex',alignItems:'baseline',gap:'6px',marginBottom:'6px'}}>
+            <div style={{fontSize:'26px',fontWeight:'700',color:steps>0?color:'#ccc',lineHeight:1}}>{steps>0?steps.toLocaleString('es-AR'):'—'}</div>
+            <div style={{fontSize:'12px',color:'#bbb'}}>/ {goal.toLocaleString('es-AR')}</div>
+            {burned>0&&<div style={{fontSize:'11px',color:'#1D9E75',fontWeight:'500',marginLeft:'4px'}}>~{burned} kcal quemadas</div>}
+          </div>
+          <div style={{background:'#f0f0f0',borderRadius:'6px',height:'5px'}}>
+            <div style={{background:steps>0?color:'#f0f0f0',borderRadius:'6px',height:'5px',width:`${pct}%`,transition:'width 0.8s ease'}}/>
+          </div>
+          <div style={{fontSize:'10px',color:'#aaa',marginTop:'4px'}}>{steps>0?(pct>=100?'¡Meta alcanzada!':`Faltan ${remaining.toLocaleString('es-AR')} pasos`):'Sin datos hoy'}</div>
+        </div>
       </div>
-      <div style={{flex:1}}>
-        <div style={{fontSize:'13px',fontWeight:'600',color:'#1a1a2e',marginBottom:'2px'}}>Pasos del día</div>
-        <div style={{display:'flex',alignItems:'baseline',gap:'6px',marginBottom:'6px'}}>
-          <div style={{fontSize:'26px',fontWeight:'700',color:steps>0?color:'#ccc',lineHeight:1}}>{steps>0?steps.toLocaleString('es-AR'):'—'}</div>
-          <div style={{fontSize:'12px',color:'#bbb'}}>/ {goal.toLocaleString('es-AR')}</div>
-          {burned>0&&<div style={{fontSize:'11px',color:'#1D9E75',fontWeight:'500',marginLeft:'4px'}}>~{burned} kcal quemadas</div>}
+      <div style={{marginTop:'12px',paddingTop:'10px',borderTop:'0.5px solid #f0f0f0'}}>
+        <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+          <input type="text" inputMode="numeric" value={input} onChange={e=>setInput(e.target.value.replace(/\D/g,''))}
+            placeholder="Ingresá tus pasos"
+            style={{flex:1,border:'0.5px solid #e0e0e0',borderRadius:'8px',padding:'7px 10px',fontSize:'12px',fontFamily:'inherit',outline:'none',color:'#333'}}/>
+          <button onClick={save} disabled={!canSave||input===''} style={{padding:'7px 18px',borderRadius:'8px',border:'none',background:(canSave&&input!=='')?'#1a1a2e':'#f0f0f0',color:(canSave&&input!=='')?'white':'#bbb',cursor:(canSave&&input!=='')?'pointer':'default',fontSize:'11px',fontWeight:'500',fontFamily:'inherit'}}>
+            {saving?'Guardando...':'Guardar'}
+          </button>
         </div>
-        <div style={{background:'#f0f0f0',borderRadius:'6px',height:'5px'}}>
-          <div style={{background:steps>0?color:'#f0f0f0',borderRadius:'6px',height:'5px',width:`${pct}%`,transition:'width 0.8s ease'}}/>
-        </div>
-        <div style={{fontSize:'10px',color:'#aaa',marginTop:'4px'}}>{steps>0?(pct>=100?'¡Meta alcanzada!':` Faltan ${remaining.toLocaleString('es-AR')} pasos`):'Sin datos hoy'}</div>
+        {input!==''&&Number(input)>0&&(
+          <div style={{marginTop:'6px',fontSize:'11px',color:'#aaa'}}>
+            Estimado: <span style={{fontWeight:'600',color:'#1D9E75'}}>~{previewBurned} kcal quemadas</span>
+            <span style={{fontSize:'10px',color:'#ccc'}}> (0.04 kcal/paso)</span>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -560,20 +614,56 @@ export default function Home() {
 
   const printReport=()=>{
     const calGoal=goals.calories||DEFAULT_GOALS.calories
-    const dateFrom=last7[0],dateTo=last7[last7.length-1]
+    // Build last 30 days array
+    const last30=[]
+    for(let i=29;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);last30.push(d.toISOString().slice(0,10))}
+    const dateFrom=last30[0],dateTo=last30[last30.length-1]
+
+    // Macro averages (days with data only)
     const macroAvgs=MACROS.map(m=>{
-      const vals=last7.map(d=>getDayTotals(dayMap,d)[m.key]||0).filter(v=>v>0)
+      const vals=last30.map(d=>getDayTotals(dayMap,d)[m.key]||0).filter(v=>v>0)
       const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0
       const goal=goals[m.goalKey]||DEFAULT_GOALS[m.goalKey]
       return{...m,avg,goal,dev:avg-goal,pct:goal?Math.round((avg/goal)*100):0}
     })
-    const microAvgs7=MICROS.map(m=>{
-      const vals=last7.map(d=>getDayMicroTotals(dayMap,d)[m.key]||0).filter(v=>v>0)
+
+    // Micro averages
+    const microAvgs=MICROS.map(m=>{
+      const vals=last30.map(d=>getDayMicroTotals(dayMap,d)[m.key]||0).filter(v=>v>0)
       const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0
       return{...m,avg,pct:avg>0?Math.round((avg/m.goal)*100):0}
     })
+
+    // Steps summary
+    const stepsDays=last30.filter(d=>fitnessMap[d]?.steps>0)
+    const totalSteps=stepsDays.reduce((s,d)=>s+(fitnessMap[d]?.steps||0),0)
+    const avgSteps=stepsDays.length?Math.round(totalSteps/stepsDays.length):0
+    const totalStepCal=last30.reduce((s,d)=>s+estimateStepCal(fitnessMap[d]?.steps||0),0)
+
+    // Workout summary
+    const workoutDays=last30.filter(d=>fitnessMap[d]?.workout_minutes>0)
+    const totalWorkoutCal=workoutDays.reduce((s,d)=>s+estimateWorkoutCal(fitnessMap[d].workout_minutes,fitnessMap[d].workout_intensity),0)
+    const avgWorkoutMin=workoutDays.length?Math.round(workoutDays.reduce((s,d)=>s+(fitnessMap[d].workout_minutes||0),0)/workoutDays.length):0
+    const avgWorkoutCal=workoutDays.length?Math.round(totalWorkoutCal/workoutDays.length):0
+    const intensityCount={baja:0,media:0,alta:0}
+    workoutDays.forEach(d=>{const k=fitnessMap[d].workout_intensity;if(k&&intensityCount[k]!==undefined)intensityCount[k]++})
+    // Most common workout type
+    const typeFreq={}
+    workoutDays.forEach(d=>{const t=fitnessMap[d].workout_type;if(t){typeFreq[t]=(typeFreq[t]||0)+1}})
+    const topType=Object.keys(typeFreq).sort((a,b)=>typeFreq[b]-typeFreq[a])[0]||'—'
+
+    // 30-day caloric balance
+    let cal30consumed=0,cal30loggedDays=0,cal30burned=0
+    last30.forEach(d=>{
+      const v=getDayTotals(dayMap,d).calories||0
+      if(v>0){cal30consumed+=v;cal30loggedDays++}
+      cal30burned+=getFitnessBurned(fitnessMap[d]).total
+    })
+    const cal30surplus=Math.round(cal30consumed-(calGoal*cal30loggedDays))
+    const cal30net=Math.round(cal30consumed-cal30burned)
+
     const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
-<title>Reporte Nutricional</title>
+<title>Reporte Nutricional Mensual</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a2e;font-size:11px;line-height:1.45;padding:28px 32px}
@@ -585,12 +675,16 @@ th{padding:6px 8px;text-align:left;background:#f5f7ff;font-weight:600;border:0.5
 td{padding:5px 8px;border:0.5px solid #eee;vertical-align:middle}
 tr:nth-child(even) td{background:#fafafa}
 .ok{color:#1D9E75;font-weight:600}.warn{color:#EF9F27;font-weight:600}.bad{color:#E24B4A;font-weight:600}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:4px}
+.kpi{background:#f5f7ff;border-radius:6px;padding:10px 12px}
+.kpi-val{font-size:18px;font-weight:700;color:#1a1a2e}
+.kpi-lbl{font-size:9px;color:#888;margin-top:2px}
 .footer{margin-top:28px;padding-top:10px;border-top:1px solid #e8e8e8;font-size:9px;color:#bbb;text-align:center}
 </style></head><body>
-<h1>📋 Reporte Nutricional</h1>
-<div class="meta">Período: ${fmtShort(dateFrom)} — ${fmtShort(dateTo)} &nbsp;·&nbsp; Objetivo calórico diario: ${calGoal} kcal &nbsp;·&nbsp; Generado: ${new Date().toLocaleDateString('es-AR',{day:'numeric',month:'long',year:'numeric'})}</div>
+<h1>📋 Reporte Nutricional Mensual</h1>
+<div class="meta">Período: ${fmtShort(dateFrom)} — ${fmtShort(dateTo)} (30 días) &nbsp;·&nbsp; Objetivo calórico diario: ${calGoal} kcal &nbsp;·&nbsp; Generado: ${new Date().toLocaleDateString('es-AR',{day:'numeric',month:'long',year:'numeric'})}</div>
 
-<h2>📊 Macros — promedio diario (últimos 7 días)</h2>
+<h2>📊 Macros — promedio diario (últimos 30 días)</h2>
 <table><tr><th>Macro</th><th>Promedio</th><th>Objetivo</th><th>Desvío</th><th>% del objetivo</th><th>Estado</th></tr>
 ${macroAvgs.map(m=>{
   const cl=m.avg===0?'':Math.abs(m.dev)<m.goal*0.1?'ok':Math.abs(m.dev)<m.goal*0.25?'warn':'bad'
@@ -599,9 +693,9 @@ ${macroAvgs.map(m=>{
 }).join('')}
 </table>
 
-<h2>🔬 Micros — promedio diario (últimos 7 días)</h2>
+<h2>🔬 Micros — promedio diario (últimos 30 días)</h2>
 <table><tr><th>Micro</th><th>Promedio</th><th>Referencia</th><th>%</th><th>Tipo</th><th>Estado</th></tr>
-${microAvgs7.map(m=>{
+${microAvgs.map(m=>{
   const typeLabel=m.type==='max'?'Máximo':m.type==='min'?'Mínimo':'Objetivo'
   const sc=microStatusColor(m.avg,m.goal,m.type)
   const cl=sc==='#1D9E75'?'ok':sc==='#EF9F27'||sc==='#F97316'?'warn':'bad'
@@ -610,36 +704,39 @@ ${microAvgs7.map(m=>{
 }).join('')}
 </table>
 
-<h2>📅 Detalle diario</h2>
-<table><tr><th>Fecha</th><th>Calorías</th><th>Proteínas</th><th>Carbos</th><th>Grasas</th><th>Fibra</th><th>Pasos</th><th>Entreno</th><th>Quemadas</th></tr>
-${last7.map(d=>{
-  const dt=getDayTotals(dayMap,d)
-  const fr=fitnessMap[d]
-  const burned=getFitnessBurned(fr)
-  const dn=DAY_NAMES_LONG[new Date(d+'T12:00:00').getDay()]
-  const isT=d===today
-  return`<tr${isT?' style="font-weight:600;background:#f0f4ff"':''}>
-<td>${dn} ${fmtShort(d)}${isT?' ←':''}</td>
-${MACROS.map(m=>`<td style="text-align:center">${(dt[m.key]||0)>0?Math.round(dt[m.key])+m.unit:'—'}</td>`).join('')}
-<td style="text-align:center">${fr?.steps?fr.steps.toLocaleString('es-AR'):'—'}</td>
-<td style="text-align:center;font-size:10px">${fr?.workout_minutes?`${fr.workout_type?fr.workout_type+' ':''}${fr.workout_minutes}min ${fr.workout_intensity||''}`:'—'}</td>
-<td style="text-align:center;color:#1D9E75">${burned.total>0?'~'+burned.total+' kcal':'—'}</td>
-</tr>`
+<h2>👟 Pasos — resumen 30 días</h2>
+<div class="kpi-grid">
+  <div class="kpi"><div class="kpi-val">${avgSteps.toLocaleString('es-AR')}</div><div class="kpi-lbl">Promedio diario de pasos</div></div>
+  <div class="kpi"><div class="kpi-val">${totalSteps.toLocaleString('es-AR')}</div><div class="kpi-lbl">Total de pasos</div></div>
+  <div class="kpi"><div class="kpi-val">${stepsDays.length} / 30</div><div class="kpi-lbl">Días con registro</div></div>
+  <div class="kpi"><div class="kpi-val">~${totalStepCal.toLocaleString('es-AR')} kcal</div><div class="kpi-lbl">Total quemadas por pasos</div></div>
+</div>
+
+<h2>🏋️ Entrenamientos — resumen 30 días</h2>
+<div class="kpi-grid">
+  <div class="kpi"><div class="kpi-val">${workoutDays.length}</div><div class="kpi-lbl">Días entrenados</div></div>
+  <div class="kpi"><div class="kpi-val">${avgWorkoutMin} min</div><div class="kpi-lbl">Duración promedio</div></div>
+  <div class="kpi"><div class="kpi-val">~${avgWorkoutCal} kcal</div><div class="kpi-lbl">Quemadas promedio/día</div></div>
+  <div class="kpi"><div class="kpi-val">${topType}</div><div class="kpi-lbl">Tipo más frecuente</div></div>
+</div>
+<table><tr><th>Intensidad</th><th>Días</th><th>% del total entrenado</th></tr>
+${['baja','media','alta'].map(k=>{
+  const lbl=k==='baja'?'Baja (4 kcal/min)':k==='media'?'Media (7 kcal/min)':'Alta (10 kcal/min)'
+  const cnt=intensityCount[k]
+  const pct=workoutDays.length?Math.round((cnt/workoutDays.length)*100):0
+  return`<tr><td>${lbl}</td><td>${cnt}</td><td>${workoutDays.length?pct+'%':'—'}</td></tr>`
 }).join('')}
-<tr style="background:#f0f2ff;font-weight:700"><td>PROMEDIO</td>
-${MACROS.map(m=>{const vals=last7.map(d=>getDayTotals(dayMap,d)[m.key]||0).filter(v=>v>0);const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0;return`<td style="text-align:center">${avg>0?avg+m.unit:'—'}</td>`}).join('')}
-<td colspan="3" style="text-align:center;color:#888">—</td></tr>
 </table>
 
-<h2>⚖️ Balance calórico semanal</h2>
+<h2>⚖️ Balance calórico — 30 días</h2>
 <table><tr><th>Consumidas (total)</th><th>Objetivo total</th><th>Superávit / Déficit</th><th>Quemadas por actividad</th><th>Balance neto</th><th>Días registrados</th></tr>
 <tr>
-<td>${weekCalBalance.consumed.toLocaleString('es-AR')} kcal</td>
-<td>${weekCalBalance.goalTotal.toLocaleString('es-AR')} kcal</td>
-<td class="${weekCalBalance.surplus<=0?'ok':weekCalBalance.surplus<500?'warn':'bad'}">${weekCalBalance.surplus>=0?'+':''}${weekCalBalance.surplus} kcal</td>
-<td class="ok">${weekCalBalance.burned.toLocaleString('es-AR')} kcal</td>
-<td class="${weekCalBalance.net<=weekCalBalance.goalTotal?'ok':'warn'}">${weekCalBalance.net.toLocaleString('es-AR')} kcal</td>
-<td>${weekCalBalance.loggedDays} / 7</td>
+<td>${cal30consumed.toLocaleString('es-AR')} kcal</td>
+<td>${(calGoal*cal30loggedDays).toLocaleString('es-AR')} kcal</td>
+<td class="${cal30surplus<=0?'ok':cal30surplus<2000?'warn':'bad'}">${cal30surplus>=0?'+':''}${cal30surplus.toLocaleString('es-AR')} kcal</td>
+<td class="ok">${cal30burned.toLocaleString('es-AR')} kcal</td>
+<td class="${cal30net<=(calGoal*cal30loggedDays)?'ok':'warn'}">${cal30net.toLocaleString('es-AR')} kcal</td>
+<td>${cal30loggedDays} / 30</td>
 </tr></table>
 
 <div class="footer">Generado por Nutri Tracker · ${new Date().toLocaleString('es-AR')} · Las estimaciones de calorías quemadas son aproximadas (pasos ×0.04 kcal + intensidad de entreno). Consultar con profesional.</div>
@@ -730,7 +827,7 @@ ${MACROS.map(m=>{const vals=last7.map(d=>getDayTotals(dayMap,d)[m.key]||0).filte
           )})()}
 
           {/* Pasos */}
-          <StepsCard steps={todayFitness?.steps||0} goal={todayFitness?.steps_goal||stepsGoal} burned={todayBurned.stepCal}/>
+          <StepsCard steps={todayFitness?.steps||0} goal={todayFitness?.steps_goal||stepsGoal} fitnessRow={todayFitness} selectedDate={selectedDate} onSave={fetchData}/>
 
           {/* Entrenamiento */}
           <WorkoutCard fitnessRow={todayFitness} selectedDate={selectedDate} onSave={fetchData}/>
