@@ -558,6 +558,98 @@ export default function Home() {
     return{total:Math.round(total),days:count,avg:count?Math.round(total/count):0,burned:Math.round(burned),net:Math.round(total-burned)}
   })()
 
+  const printReport=()=>{
+    const calGoal=goals.calories||DEFAULT_GOALS.calories
+    const dateFrom=last7[0],dateTo=last7[last7.length-1]
+    const macroAvgs=MACROS.map(m=>{
+      const vals=last7.map(d=>getDayTotals(dayMap,d)[m.key]||0).filter(v=>v>0)
+      const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0
+      const goal=goals[m.goalKey]||DEFAULT_GOALS[m.goalKey]
+      return{...m,avg,goal,dev:avg-goal,pct:goal?Math.round((avg/goal)*100):0}
+    })
+    const microAvgs7=MICROS.map(m=>{
+      const vals=last7.map(d=>getDayMicroTotals(dayMap,d)[m.key]||0).filter(v=>v>0)
+      const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0
+      return{...m,avg,pct:avg>0?Math.round((avg/m.goal)*100):0}
+    })
+    const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+<title>Reporte Nutricional</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Helvetica Neue',Arial,sans-serif;color:#1a1a2e;font-size:11px;line-height:1.45;padding:28px 32px}
+h1{font-size:20px;font-weight:700;margin-bottom:3px}
+.meta{font-size:10px;color:#888;margin-bottom:22px}
+h2{font-size:12px;font-weight:700;color:#444;margin:18px 0 7px;text-transform:uppercase;letter-spacing:0.5px;border-bottom:1.5px solid #e8e8e8;padding-bottom:4px}
+table{width:100%;border-collapse:collapse;margin-bottom:4px;font-size:10.5px}
+th{padding:6px 8px;text-align:left;background:#f5f7ff;font-weight:600;border:0.5px solid #dde;color:#555}
+td{padding:5px 8px;border:0.5px solid #eee;vertical-align:middle}
+tr:nth-child(even) td{background:#fafafa}
+.ok{color:#1D9E75;font-weight:600}.warn{color:#EF9F27;font-weight:600}.bad{color:#E24B4A;font-weight:600}
+.footer{margin-top:28px;padding-top:10px;border-top:1px solid #e8e8e8;font-size:9px;color:#bbb;text-align:center}
+</style></head><body>
+<h1>📋 Reporte Nutricional</h1>
+<div class="meta">Período: ${fmtShort(dateFrom)} — ${fmtShort(dateTo)} &nbsp;·&nbsp; Objetivo calórico diario: ${calGoal} kcal &nbsp;·&nbsp; Generado: ${new Date().toLocaleDateString('es-AR',{day:'numeric',month:'long',year:'numeric'})}</div>
+
+<h2>📊 Macros — promedio diario (últimos 7 días)</h2>
+<table><tr><th>Macro</th><th>Promedio</th><th>Objetivo</th><th>Desvío</th><th>% del objetivo</th><th>Estado</th></tr>
+${macroAvgs.map(m=>{
+  const cl=m.avg===0?'':Math.abs(m.dev)<m.goal*0.1?'ok':Math.abs(m.dev)<m.goal*0.25?'warn':'bad'
+  const st=m.avg===0?'Sin datos':Math.abs(m.dev)<m.goal*0.1?'✓ En objetivo':m.dev>0?'▲ Sobre objetivo':'▼ Bajo objetivo'
+  return`<tr><td><strong>${m.label}</strong></td><td>${m.avg>0?m.avg+' '+m.unit:'—'}</td><td>${m.goal} ${m.unit}</td><td>${m.avg>0?(m.dev>=0?'+':'')+m.dev+' '+m.unit:'—'}</td><td>${m.avg>0?m.pct+'%':'—'}</td><td class="${cl}">${st}</td></tr>`
+}).join('')}
+</table>
+
+<h2>🔬 Micros — promedio diario (últimos 7 días)</h2>
+<table><tr><th>Micro</th><th>Promedio</th><th>Referencia</th><th>%</th><th>Tipo</th><th>Estado</th></tr>
+${microAvgs7.map(m=>{
+  const typeLabel=m.type==='max'?'Máximo':m.type==='min'?'Mínimo':'Objetivo'
+  const sc=microStatusColor(m.avg,m.goal,m.type)
+  const cl=sc==='#1D9E75'?'ok':sc==='#EF9F27'||sc==='#F97316'?'warn':'bad'
+  const st=m.avg===0?'Sin datos':m.type==='max'?(m.avg<=m.goal?'✓ Dentro del límite':'⚠ Excede límite'):m.type==='min'?(m.avg>=m.goal?'✓ Alcanza mínimo':'⚠ Bajo mínimo'):(Math.abs(m.avg/m.goal-1)<=0.1?'✓ En objetivo':'⚠ Fuera de rango')
+  return`<tr><td><strong>${m.label}</strong></td><td>${m.avg>0?m.avg+' '+m.unit:'—'}</td><td>${m.goal} ${m.unit}</td><td>${m.avg>0?m.pct+'%':'—'}</td><td>${typeLabel}</td><td class="${cl}">${st}</td></tr>`
+}).join('')}
+</table>
+
+<h2>📅 Detalle diario</h2>
+<table><tr><th>Fecha</th><th>Calorías</th><th>Proteínas</th><th>Carbos</th><th>Grasas</th><th>Fibra</th><th>Pasos</th><th>Entreno</th><th>Quemadas</th></tr>
+${last7.map(d=>{
+  const dt=getDayTotals(dayMap,d)
+  const fr=fitnessMap[d]
+  const burned=getFitnessBurned(fr)
+  const dn=DAY_NAMES_LONG[new Date(d+'T12:00:00').getDay()]
+  const isT=d===today
+  return`<tr${isT?' style="font-weight:600;background:#f0f4ff"':''}>
+<td>${dn} ${fmtShort(d)}${isT?' ←':''}</td>
+${MACROS.map(m=>`<td style="text-align:center">${(dt[m.key]||0)>0?Math.round(dt[m.key])+m.unit:'—'}</td>`).join('')}
+<td style="text-align:center">${fr?.steps?fr.steps.toLocaleString('es-AR'):'—'}</td>
+<td style="text-align:center;font-size:10px">${fr?.workout_minutes?`${fr.workout_type?fr.workout_type+' ':''}${fr.workout_minutes}min ${fr.workout_intensity||''}`:'—'}</td>
+<td style="text-align:center;color:#1D9E75">${burned.total>0?'~'+burned.total+' kcal':'—'}</td>
+</tr>`
+}).join('')}
+<tr style="background:#f0f2ff;font-weight:700"><td>PROMEDIO</td>
+${MACROS.map(m=>{const vals=last7.map(d=>getDayTotals(dayMap,d)[m.key]||0).filter(v=>v>0);const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0;return`<td style="text-align:center">${avg>0?avg+m.unit:'—'}</td>`}).join('')}
+<td colspan="3" style="text-align:center;color:#888">—</td></tr>
+</table>
+
+<h2>⚖️ Balance calórico semanal</h2>
+<table><tr><th>Consumidas (total)</th><th>Objetivo total</th><th>Superávit / Déficit</th><th>Quemadas por actividad</th><th>Balance neto</th><th>Días registrados</th></tr>
+<tr>
+<td>${weekCalBalance.consumed.toLocaleString('es-AR')} kcal</td>
+<td>${weekCalBalance.goalTotal.toLocaleString('es-AR')} kcal</td>
+<td class="${weekCalBalance.surplus<=0?'ok':weekCalBalance.surplus<500?'warn':'bad'}">${weekCalBalance.surplus>=0?'+':''}${weekCalBalance.surplus} kcal</td>
+<td class="ok">${weekCalBalance.burned.toLocaleString('es-AR')} kcal</td>
+<td class="${weekCalBalance.net<=weekCalBalance.goalTotal?'ok':'warn'}">${weekCalBalance.net.toLocaleString('es-AR')} kcal</td>
+<td>${weekCalBalance.loggedDays} / 7</td>
+</tr></table>
+
+<div class="footer">Generado por Nutri Tracker · ${new Date().toLocaleString('es-AR')} · Las estimaciones de calorías quemadas son aproximadas (pasos ×0.04 kcal + intensidad de entreno). Consultar con profesional.</div>
+</body></html>`
+    const w=window.open('','_blank')
+    w.document.write(html)
+    w.document.close()
+    setTimeout(()=>w.print(),400)
+  }
+
   if(loading)return(
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#0f0f1a',fontFamily:'system-ui'}}>
       <div style={{textAlign:'center',color:'white'}}><div style={{fontSize:'40px',marginBottom:'12px'}}>🥗</div><div style={{opacity:0.6,fontSize:'14px'}}>Cargando...</div></div>
@@ -587,6 +679,7 @@ export default function Home() {
                   <span style={{fontSize:'10px',color:'rgba(255,180,0,0.7)'}}>racha</span>
                 </div>
               )}
+              <button onClick={printReport} style={{background:'rgba(255,255,255,0.12)',border:'1px solid rgba(255,255,255,0.2)',color:'white',padding:'6px 14px',borderRadius:'8px',cursor:'pointer',fontSize:'12px',fontFamily:'inherit'}}>📄 Exportar PDF</button>
               <button onClick={fetchData} style={{background:'rgba(255,255,255,0.1)',border:'none',color:'white',padding:'6px 14px',borderRadius:'8px',cursor:'pointer',fontSize:'12px',fontFamily:'inherit'}}>↻ Actualizar</button>
             </div>
           </div>
