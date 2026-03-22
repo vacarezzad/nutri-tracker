@@ -567,14 +567,27 @@ export default function Home() {
                   <div><div style={{fontSize:'12px',fontWeight:'600'}}>{meal.label}</div><div style={{fontSize:'11px',fontWeight:'500',color:data?meal.color:'#ccc'}}>{data?`${Math.round(data.calories)} kcal`:'Sin cargar'}</div></div>
                 </div>
                 {data?<><div style={{fontSize:'11px',color:'#888',fontStyle:'italic',marginBottom:'8px',lineHeight:'1.4'}}>{data.food}</div>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'4px'}}>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:'4px',marginBottom:'6px'}}>
                   {[{l:'Prot',v:data.protein,c:'#378ADD'},{l:'Carbs',v:data.carbs,c:'#EF9F27'},{l:'Grasas',v:data.fat,c:'#7F77DD'},{l:'Fibra',v:data.fiber,c:'#1D9E75'}].map(mac=>(
                     <div key={mac.l} style={{background:mac.c+'12',borderRadius:'6px',padding:'4px 2px',textAlign:'center'}}>
                       <div style={{fontSize:'11px',fontWeight:'600',color:mac.c}}>{Math.round(mac.v)}g</div>
                       <div style={{fontSize:'8px',color:'#aaa'}}>{mac.l}</div>
                     </div>
                   ))}
-                </div></>:<div style={{fontSize:'11px',color:'#ccc',fontStyle:'italic'}}>Todavía no cargaste esta comida</div>}
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'3px',paddingTop:'6px',borderTop:'0.5px solid #f0f0f0'}}>
+                  {MICROS.map(m=>{
+                    const val=Number(data[m.key])||0
+                    const sc=microStatusColor(val,m.goal,m.type)
+                    return(
+                      <div key={m.key} style={{background:'#fafafa',borderRadius:'5px',padding:'3px 4px',textAlign:'center'}}>
+                        <div style={{fontSize:'10px',fontWeight:'600',color:val>0?sc:'#ccc',lineHeight:1.2}}>{val>0?Math.round(val):'—'}<span style={{fontSize:'8px',fontWeight:'400',color:'#bbb'}}>{m.unit}</span></div>
+                        <div style={{fontSize:'8px',color:'#bbb',marginTop:'1px'}}>{m.label}</div>
+                      </div>
+                    )
+                  })}
+                </div>
+                </>:<div style={{fontSize:'11px',color:'#ccc',fontStyle:'italic'}}>Todavía no cargaste esta comida</div>}
               </div>)
             })}
           </div>
