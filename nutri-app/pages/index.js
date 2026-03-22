@@ -25,9 +25,9 @@ const MICROS = [
   { key: 'sodium',    label: 'Sodio',       unit: 'mg', color: '#F97316', goal: 2300, type: 'max'    },
   { key: 'potassium', label: 'Potasio',     unit: 'mg', color: '#8B5CF6', goal: 3500, type: 'min'    },
   { key: 'sugar',     label: 'Azúcares',    unit: 'g',  color: '#EC4899', goal: 50,   type: 'max'    },
-  { key: 'satFat',    label: 'G. Saturadas',unit: 'g',  color: '#DC2626', goal: 22,   type: 'max'    },
-  { key: 'monoFat',   label: 'G. Mono.',    unit: 'g',  color: '#059669', goal: 30,   type: 'target' },
-  { key: 'polyFat',   label: 'G. Poli.',    unit: 'g',  color: '#0284C7', goal: 15,   type: 'target' },
+  { key: 'sat_fat',   label: 'G. Saturadas',unit: 'g',  color: '#DC2626', goal: 22,   type: 'max'    },
+  { key: 'mono_fat',  label: 'G. Mono.',    unit: 'g',  color: '#059669', goal: 30,   type: 'target' },
+  { key: 'poly_fat',  label: 'G. Poli.',    unit: 'g',  color: '#0284C7', goal: 15,   type: 'target' },
 ]
 
 const DEFAULT_GOALS = { calories: 2200, protein: 170, carbs: 220, fat: 70, fiber: 30 }
