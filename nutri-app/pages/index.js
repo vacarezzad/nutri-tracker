@@ -20,6 +20,16 @@ const MACROS = [
   { key: 'fiber',    label: 'Fibra',     unit: 'g',    color: '#1D9E75', goalKey: 'fiber',    heatColors: ['#E1F5EE','#9FE1CB','#5DCAA5','#1D9E75','#085041'] },
 ]
 
+// type: 'max' = no pasar de X | 'min' = llegar a X | 'target' = apuntar a X
+const MICROS = [
+  { key: 'sodium',    label: 'Sodio',       unit: 'mg', color: '#F97316', goal: 2300, type: 'max'    },
+  { key: 'potassium', label: 'Potasio',     unit: 'mg', color: '#8B5CF6', goal: 3500, type: 'min'    },
+  { key: 'sugar',     label: 'Azúcares',    unit: 'g',  color: '#EC4899', goal: 50,   type: 'max'    },
+  { key: 'satFat',    label: 'G. Saturadas',unit: 'g',  color: '#DC2626', goal: 22,   type: 'max'    },
+  { key: 'monoFat',   label: 'G. Mono.',    unit: 'g',  color: '#059669', goal: 30,   type: 'target' },
+  { key: 'polyFat',   label: 'G. Poli.',    unit: 'g',  color: '#0284C7', goal: 15,   type: 'target' },
+]
+
 const DEFAULT_GOALS = { calories: 2200, protein: 170, carbs: 220, fat: 70, fiber: 30 }
 const DAY_NAMES_LONG = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
@@ -41,6 +51,29 @@ function buildDayMap(meals) {
 function getDayTotals(dayMap,date) {
   const dm=dayMap[date]||{}
   return MACROS.reduce((acc,m)=>{ acc[m.key]=MEALS.reduce((s,meal)=>s+(Number(dm[meal.key]?.[m.key])||0),0); return acc },{})
+}
+function getDayMicroTotals(dayMap,date) {
+  const dm=dayMap[date]||{}
+  return MICROS.reduce((acc,m)=>{ acc[m.key]=MEALS.reduce((s,meal)=>s+(Number(dm[meal.key]?.[m.key])||0),0); return acc },{})
+}
+function microStatusColor(value,goal,type) {
+  if(!value)return'#ccc'
+  const r=value/goal
+  if(type==='max'){
+    if(r<0.75)return'#1D9E75'
+    if(r<0.9) return'#EF9F27'
+    if(r<1.0) return'#F97316'
+    return'#E24B4A'
+  }
+  if(type==='min'){
+    if(r>=0.9) return'#1D9E75'
+    if(r>=0.75)return'#EF9F27'
+    return'#E24B4A'
+  }
+  // target
+  if(r>=0.9&&r<=1.1)return'#1D9E75'
+  if(r>=0.75&&r<=1.25)return'#EF9F27'
+  return'#E24B4A'
 }
 function heatColor(value,goal,colors) {
   if(!value)return'#f5f5f5'
@@ -76,6 +109,74 @@ function getMealMonthAvgs(dayMap,year,month) {
     const avgs=MACROS.reduce((acc,m)=>{ acc[m.key]=Math.round(rows.reduce((s,r)=>s+(Number(r[m.key])||0),0)/n); return acc },{})
     return{...meal,count:n,avgs}
   })
+}
+
+function MicrosGrid({microTotals}) {
+  return (
+    <div style={{marginBottom:'14px'}}>
+      <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'8px'}}>🔬 Micros</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:'8px'}}>
+        {MICROS.map(m=>{
+          const val=microTotals[m.key]||0
+          const pct=val>0?Math.min(Math.round((val/m.goal)*100),150):0
+          const sc=microStatusColor(val,m.goal,m.type)
+          const barPct=Math.min((val/m.goal)*100,100)
+          const typeLabel=m.type==='max'?'límite':m.type==='min'?'mínimo':'objetivo'
+          return(
+            <div key={m.key} style={{background:'white',borderRadius:'12px',border:'0.5px solid #e8e8e8',padding:'10px 12px'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'4px'}}>
+                <div style={{fontSize:'10px',fontWeight:'600',color:'#555'}}>{m.label}</div>
+                <div style={{fontSize:'9px',color:'#bbb'}}>{m.goal}{m.unit}</div>
+              </div>
+              <div style={{fontSize:'17px',fontWeight:'600',color:val>0?sc:'#ccc',lineHeight:1}}>
+                {val>0?Math.round(val):'—'}<span style={{fontSize:'10px',fontWeight:'400',color:'#bbb'}}> {m.unit}</span>
+              </div>
+              <div style={{background:'#f0f0f0',borderRadius:'4px',height:'4px',marginTop:'6px'}}>
+                <div style={{background:val>0?sc:'#f0f0f0',borderRadius:'4px',height:'4px',width:`${barPct}%`,transition:'width 0.6s ease'}}/>
+              </div>
+              <div style={{fontSize:'9px',color:val>0?sc:'#ccc',marginTop:'3px',fontWeight:'500'}}>
+                {val>0?`${pct}% del ${typeLabel}`:'Sin datos'}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function MicrosSummary({microAvgs,label}) {
+  return (
+    <div style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px',marginTop:'12px'}}>
+      <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'12px'}}>🔬 {label}</div>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:'8px'}}>
+        {microAvgs.map(m=>{
+          const val=m.avg||0
+          const pct=val>0?Math.min(Math.round((val/m.goal)*100),150):0
+          const sc=microStatusColor(val,m.goal,m.type)
+          const barPct=Math.min((val/m.goal)*100,100)
+          const typeLabel=m.type==='max'?'límite':m.type==='min'?'mínimo':'objetivo'
+          return(
+            <div key={m.key} style={{display:'flex',flexDirection:'column',gap:'4px',padding:'8px 10px',background:'#fafafa',borderRadius:'10px',border:'0.5px solid #f0f0f0'}}>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
+                <div style={{fontSize:'10px',fontWeight:'600',color:'#555'}}>{m.label}</div>
+                <div style={{fontSize:'9px',color:'#bbb'}}>{m.goal}{m.unit}</div>
+              </div>
+              <div style={{fontSize:'15px',fontWeight:'600',color:val>0?sc:'#ccc',lineHeight:1}}>
+                {val>0?Math.round(val):'—'}<span style={{fontSize:'10px',fontWeight:'400',color:'#bbb'}}> {m.unit}</span>
+              </div>
+              <div style={{background:'#e8e8e8',borderRadius:'4px',height:'3px'}}>
+                <div style={{background:val>0?sc:'#e8e8e8',borderRadius:'4px',height:'3px',width:`${barPct}%`,transition:'width 0.6s ease'}}/>
+              </div>
+              <div style={{fontSize:'9px',color:val>0?sc:'#ccc',fontWeight:'500'}}>
+                {val>0?`${pct}% del ${typeLabel}`:'Sin datos'}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function LineChart({series,goal,color}) {
@@ -178,10 +279,13 @@ export default function Home() {
 
   const today=todayStr(),last7=getLast7(),dayMap=buildDayMap(rawMeals)
   const dayMeals=dayMap[selectedDate]||{},totals=getDayTotals(dayMap,selectedDate)
+  const microTotals=getDayMicroTotals(dayMap,selectedDate)
+
   const now=new Date()
   const heatMonth=((now.getMonth()+monthOffset)%12+12)%12
   const heatYear=now.getFullYear()+Math.floor((now.getMonth()+monthOffset)/12)
   const daysInHeatMonth=getDaysInMonth(heatYear,heatMonth)
+
   const monthAvgs=MACROS.map(m=>{
     const vals=Array.from({length:daysInHeatMonth},(_,i)=>{
       const d=`${heatYear}-${String(heatMonth+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`
@@ -190,6 +294,21 @@ export default function Home() {
     return{...m,avg:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0}
   })
   const mealAvgs=getMealMonthAvgs(dayMap,heatYear,heatMonth)
+
+  // Micro averages — semana
+  const weekMicroAvgs=MICROS.map(m=>{
+    const vals=last7.map(d=>getDayMicroTotals(dayMap,d)[m.key]||0).filter(v=>v>0)
+    return{...m,avg:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0}
+  })
+
+  // Micro averages — mes
+  const monthMicroAvgs=MICROS.map(m=>{
+    const vals=Array.from({length:daysInHeatMonth},(_,i)=>{
+      const d=`${heatYear}-${String(heatMonth+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`
+      return getDayMicroTotals(dayMap,d)[m.key]||0
+    }).filter(v=>v>0)
+    return{...m,avg:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0}
+  })
 
   if(loading)return(
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#0f0f1a',fontFamily:'system-ui'}}>
@@ -233,6 +352,9 @@ export default function Home() {
               </button>)
             })}
           </div>
+
+          {/* Macros */}
+          <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'8px'}}>💊 Macros</div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(5,minmax(0,1fr))',gap:'8px',marginBottom:'14px'}}>
             {MACROS.map(m=>{
               const val=totals[m.key]||0,goal=goals[m.goalKey]||DEFAULT_GOALS[m.goalKey],pct=goal?Math.min(Math.round((val/goal)*100),100):0
@@ -249,6 +371,11 @@ export default function Home() {
               </div>)
             })}
           </div>
+
+          {/* Micros */}
+          <MicrosGrid microTotals={microTotals}/>
+
+          {/* Comidas */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:'10px'}}>
             {MEALS.map(meal=>{
               const data=dayMeals[meal.key]
@@ -319,6 +446,7 @@ export default function Home() {
               </table>
             </div>
           </div>
+          <MicrosSummary microAvgs={weekMicroAvgs} label="Promedio semanal — micros"/>
         </>}
 
         {tab==='mes'&&<>
@@ -360,7 +488,7 @@ export default function Home() {
               })}
             </div>
           </div>
-          <div>
+          <div style={{marginBottom:'16px'}}>
             <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'10px'}}>🍽 Promedio mensual por comida</div>
             <div style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px'}}>
               <div style={{overflowX:'auto'}}>
@@ -394,6 +522,7 @@ export default function Home() {
               </div>
             </div>
           </div>
+          <MicrosSummary microAvgs={monthMicroAvgs} label="Promedio mensual — micros"/>
         </>}
       </div>
     </div>
