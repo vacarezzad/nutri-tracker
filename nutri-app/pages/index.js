@@ -343,6 +343,37 @@ function TrendLineChart({weeks,goal,color,unit}) {
   )
 }
 
+function StepsCard({steps,goal}) {
+  const pct=steps>0?Math.min((steps/goal)*100,100):0
+  const r=22,circ=2*Math.PI*r,dash=(pct/100)*circ
+  const color=pct>=100?'#1D9E75':pct>=70?'#EF9F27':'#378ADD'
+  const remaining=Math.max(goal-steps,0)
+  return(
+    <div style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px 16px',marginBottom:'14px',display:'flex',alignItems:'center',gap:'16px'}}>
+      <div style={{position:'relative',width:'52px',height:'52px',flexShrink:0}}>
+        <svg width="52" height="52" viewBox="0 0 52 52">
+          <circle cx="26" cy="26" r={r} fill="none" stroke="#f0f0f0" strokeWidth="5"/>
+          <circle cx="26" cy="26" r={r} fill="none" stroke={steps>0?color:'#f0f0f0'} strokeWidth="5"
+            strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" transform="rotate(-90 26 26)"
+            style={{transition:'stroke-dasharray 0.8s ease'}}/>
+        </svg>
+        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'18px'}}>👟</div>
+      </div>
+      <div style={{flex:1}}>
+        <div style={{fontSize:'13px',fontWeight:'600',color:'#1a1a2e',marginBottom:'2px'}}>Pasos del día</div>
+        <div style={{display:'flex',alignItems:'baseline',gap:'6px',marginBottom:'6px'}}>
+          <div style={{fontSize:'26px',fontWeight:'700',color:steps>0?color:'#ccc',lineHeight:1}}>{steps>0?steps.toLocaleString('es-AR'):'—'}</div>
+          <div style={{fontSize:'12px',color:'#bbb'}}>/ {goal.toLocaleString('es-AR')}</div>
+        </div>
+        <div style={{background:'#f0f0f0',borderRadius:'6px',height:'5px'}}>
+          <div style={{background:steps>0?color:'#f0f0f0',borderRadius:'6px',height:'5px',width:`${pct}%`,transition:'width 0.8s ease'}}/>
+        </div>
+        <div style={{fontSize:'10px',color:'#aaa',marginTop:'4px'}}>{steps>0?(pct>=100?'¡Meta alcanzada!':` Faltan ${remaining.toLocaleString('es-AR')} pasos`):'Sin datos hoy'}</div>
+      </div>
+    </div>
+  )
+}
+
 export default function Home() {
   const [rawMeals,setRawMeals]=useState([])
   const [goals,setGoals]=useState(DEFAULT_GOALS)
@@ -351,6 +382,7 @@ export default function Home() {
   const [selectedDate,setSelectedDate]=useState(todayStr())
   const [monthOffset,setMonthOffset]=useState(0)
   const [tendPeriod,setTendPeriod]=useState(30)
+  const [rawFitness,setRawFitness]=useState([])
 
   const fetchData=async()=>{
     try{
@@ -358,6 +390,7 @@ export default function Home() {
       const data=await res.json()
       setRawMeals(data.meals||[])
       if(data.goals)setGoals(data.goals)
+      setRawFitness(data.fitness||[])
     }catch(e){}
     setLoading(false)
   }
@@ -375,6 +408,11 @@ export default function Home() {
   const streak=calcStreak(dayMap)
   const periodWeeks=getPeriodWeeks(dayMap,tendPeriod)
   const periodAdherence=getPeriodAdherence(dayMap,tendPeriod)
+
+  const stepsGoalRow=rawFitness.find(r=>r.date==='__goal__')
+  const stepsGoal=stepsGoalRow?stepsGoalRow.steps_goal:5000
+  const stepsMap=rawFitness.reduce((acc,r)=>{if(r.date!=='__goal__')acc[r.date]={steps:r.steps,goal:r.steps_goal||stepsGoal};return acc},{})
+  const todaySteps=stepsMap[selectedDate]||{steps:0,goal:stepsGoal}
 
   const now=new Date()
   const heatMonth=((now.getMonth()+monthOffset)%12+12)%12
@@ -404,6 +442,17 @@ export default function Home() {
     }).filter(v=>v>0)
     return{...m,avg:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0}
   })
+
+  const monthCalBalance=(()=>{
+    const calGoal=goals.calories||DEFAULT_GOALS.calories
+    let total=0,count=0
+    for(let d=1;d<=daysInHeatMonth;d++){
+      const ds=`${heatYear}-${String(heatMonth+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`
+      const v=getDayTotals(dayMap,ds).calories||0
+      if(v>0){total+=(v-calGoal);count++}
+    }
+    return{total:Math.round(total),days:count,avg:count?Math.round(total/count):0}
+  })()
 
   if(loading)return(
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',background:'#0f0f1a',fontFamily:'system-ui'}}>
@@ -482,6 +531,9 @@ export default function Home() {
               </div>
             </div>
           )})()}
+
+          {/* Pasos */}
+          <StepsCard steps={todaySteps.steps} goal={todaySteps.goal}/>
 
           {/* Macros */}
           <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'8px'}}>💊 Macros</div>
@@ -597,6 +649,26 @@ export default function Home() {
               </div>)
             })}
           </div>
+          {/* Balance calórico acumulado */}
+          {monthCalBalance.days>0&&(
+            <div style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px 16px',marginBottom:'14px'}}>
+              <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'10px'}}>⚖️ Balance calórico acumulado — {MONTH_NAMES[heatMonth]}</div>
+              <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px'}}>
+                {[
+                  {label:'Acumulado',value:`${monthCalBalance.total>=0?'+':''}${monthCalBalance.total.toLocaleString('es-AR')} kcal`,color:monthCalBalance.total<=0?'#1D9E75':monthCalBalance.total<500?'#EF9F27':'#E24B4A'},
+                  {label:'Prom. diario',value:`${monthCalBalance.avg>=0?'+':''}${monthCalBalance.avg} kcal/día`,color:Math.abs(monthCalBalance.avg)<100?'#1D9E75':Math.abs(monthCalBalance.avg)<300?'#EF9F27':'#E24B4A'},
+                  {label:'Días con datos',value:`${monthCalBalance.days}d`,color:'#7F77DD'},
+                ].map(s=>(
+                  <div key={s.label} style={{textAlign:'center',padding:'10px 6px',background:'#fafafa',borderRadius:'10px',border:'0.5px solid #f0f0f0'}}>
+                    <div style={{fontSize:'15px',fontWeight:'700',color:s.color,lineHeight:1,marginBottom:'4px'}}>{s.value}</div>
+                    <div style={{fontSize:'9px',color:'#aaa',fontWeight:'500'}}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{fontSize:'10px',color:'#bbb',marginTop:'8px',textAlign:'center'}}>Positivo = superávit · Negativo = déficit vs objetivo diario de {(goals.calories||DEFAULT_GOALS.calories).toLocaleString('es-AR')} kcal</div>
+            </div>
+          )}
+
           <div style={{marginBottom:'16px'}}>
             <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'10px'}}>📊 Evolución semanal — promedio diario por semana</div>
             <div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:'12px'}}>
