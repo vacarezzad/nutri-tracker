@@ -34,6 +34,7 @@ const DEFAULT_GOALS = { calories: 2200, protein: 170, carbs: 220, fat: 70, fiber
 
 // Mifflin-St Jeor: 49 años, 88 kg, 183 cm, hombre
 const BMR = Math.round(10 * 88 + 6.25 * 183 - 5 * 49 + 5) // 1784 kcal/día
+const DEFAULT_STEPS = 3000
 
 const WORKOUT_INTENSITIES = [
   {key:'baja', label:'Baja',  kcalPerMin:4,  color:'#1D9E75'},
@@ -442,15 +443,17 @@ function WorkoutCard({fitnessRow,selectedDate,onSave}) {
 }
 
 function StepsCard({steps,goal,fitnessRow,selectedDate,onSave}) {
-  const [input,setInput]=useState(steps>0?String(steps):'')
+  const [input,setInput]=useState(steps>0?String(steps):String(DEFAULT_STEPS))
   const [saving,setSaving]=useState(false)
 
-  useEffect(()=>{setInput(steps>0?String(steps):'')},[selectedDate,steps])
+  useEffect(()=>{setInput(steps>0?String(steps):String(DEFAULT_STEPS))},[selectedDate,steps])
 
-  const pct=steps>0?Math.min((steps/goal)*100,100):0
+  const displaySteps=steps>0?steps:DEFAULT_STEPS
+  const isRef=steps===0
+  const pct=Math.min((displaySteps/goal)*100,100)
   const r=22,circ=2*Math.PI*r,dash=(pct/100)*circ
-  const color=pct>=100?'#1D9E75':pct>=70?'#EF9F27':'#378ADD'
-  const remaining=Math.max(goal-steps,0)
+  const color=isRef?'#ccc':pct>=100?'#1D9E75':pct>=70?'#EF9F27':'#378ADD'
+  const remaining=Math.max(goal-displaySteps,0)
   const burned=estimateStepCal(steps)
   const previewBurned=estimateStepCal(Number(input)||0)
   const canSave=Number(input)>=0&&String(Number(input))===input.trim()&&!saving
@@ -481,8 +484,8 @@ function StepsCard({steps,goal,fitnessRow,selectedDate,onSave}) {
         <div style={{position:'relative',width:'52px',height:'52px',flexShrink:0}}>
           <svg width="52" height="52" viewBox="0 0 52 52">
             <circle cx="26" cy="26" r={r} fill="none" stroke="#f0f0f0" strokeWidth="5"/>
-            <circle cx="26" cy="26" r={r} fill="none" stroke={steps>0?color:'#f0f0f0'} strokeWidth="5"
-              strokeDasharray={`${dash} ${circ}`} strokeLinecap="round" transform="rotate(-90 26 26)"
+            <circle cx="26" cy="26" r={r} fill="none" stroke={color} strokeWidth="5"
+              strokeDasharray={isRef?`4 6`:`${dash} ${circ}`} strokeLinecap="round" transform="rotate(-90 26 26)"
               style={{transition:'stroke-dasharray 0.8s ease'}}/>
           </svg>
           <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:'18px'}}>👟</div>
@@ -490,14 +493,15 @@ function StepsCard({steps,goal,fitnessRow,selectedDate,onSave}) {
         <div style={{flex:1}}>
           <div style={{fontSize:'13px',fontWeight:'600',color:'#1a1a2e',marginBottom:'2px'}}>Pasos del día</div>
           <div style={{display:'flex',alignItems:'baseline',gap:'6px',marginBottom:'6px'}}>
-            <div style={{fontSize:'26px',fontWeight:'700',color:steps>0?color:'#ccc',lineHeight:1}}>{steps>0?steps.toLocaleString('es-AR'):'—'}</div>
+            <div style={{fontSize:'26px',fontWeight:'700',color:isRef?'#bbb':color,lineHeight:1}}>{displaySteps.toLocaleString('es-AR')}</div>
+            {isRef&&<div style={{fontSize:'10px',color:'#ccc',fontWeight:'400',background:'#f5f5f5',borderRadius:'4px',padding:'1px 5px'}}>ref.</div>}
             <div style={{fontSize:'12px',color:'#bbb'}}>/ {goal.toLocaleString('es-AR')}</div>
             {burned>0&&<div style={{fontSize:'11px',color:'#1D9E75',fontWeight:'500',marginLeft:'4px'}}>~{burned} kcal quemadas</div>}
           </div>
           <div style={{background:'#f0f0f0',borderRadius:'6px',height:'5px'}}>
-            <div style={{background:steps>0?color:'#f0f0f0',borderRadius:'6px',height:'5px',width:`${pct}%`,transition:'width 0.8s ease'}}/>
+            <div style={{background:isRef?'#e0e0e0':color,borderRadius:'6px',height:'5px',width:`${pct}%`,transition:'width 0.8s ease'}}/>
           </div>
-          <div style={{fontSize:'10px',color:'#aaa',marginTop:'4px'}}>{steps>0?(pct>=100?'¡Meta alcanzada!':`Faltan ${remaining.toLocaleString('es-AR')} pasos`):'Sin datos hoy'}</div>
+          <div style={{fontSize:'10px',color:'#aaa',marginTop:'4px'}}>{isRef?`Referencia: ${DEFAULT_STEPS.toLocaleString('es-AR')} pasos (sin confirmar)`:(pct>=100?'¡Meta alcanzada!':`Faltan ${remaining.toLocaleString('es-AR')} pasos`)}</div>
         </div>
       </div>
       <div style={{marginTop:'12px',paddingTop:'10px',borderTop:'0.5px solid #f0f0f0'}}>
@@ -559,7 +563,10 @@ export default function Home() {
   const stepsGoal=stepsGoalRow?stepsGoalRow.steps_goal:5000
   const fitnessMap=rawFitness.reduce((acc,r)=>{if(r.date!=='__goal__')acc[r.date]=r;return acc},{})
   const todayFitness=fitnessMap[selectedDate]||null
-  const todayBurned=getFitnessBurned(todayFitness)
+  const todayBurnedRaw=getFitnessBurned(todayFitness)
+  // Si no hay pasos guardados, usar DEFAULT_STEPS como referencia en el balance
+  const todayStepsForBalance=todayFitness?.steps>0?todayFitness.steps:DEFAULT_STEPS
+  const todayBurned={...todayBurnedRaw,stepCal:estimateStepCal(todayStepsForBalance),total:estimateStepCal(todayStepsForBalance)+todayBurnedRaw.workoutCal}
 
   const now=new Date()
   const heatMonth=((now.getMonth()+monthOffset)%12+12)%12
@@ -865,7 +872,7 @@ ${['baja','media','alta'].map(k=>{
                 </div>
                 <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
                   <div style={{fontSize:'10px',color:'#bbb',background:'#f5f5f5',borderRadius:'6px',padding:'3px 8px'}}>🔥 Basal: {BMR} kcal</div>
-                  {todayBurned.stepCal>0&&<div style={{fontSize:'10px',color:'#bbb',background:'#f5f5f5',borderRadius:'6px',padding:'3px 8px'}}>👟 Pasos: ~{todayBurned.stepCal} kcal</div>}
+                  {todayBurned.stepCal>0&&<div style={{fontSize:'10px',color:'#bbb',background:'#f5f5f5',borderRadius:'6px',padding:'3px 8px'}}>👟 Pasos: ~{todayBurned.stepCal} kcal{!todayFitness?.steps?' (ref.)':''}</div>}
                   {todayBurned.workoutCal>0&&<div style={{fontSize:'10px',color:'#bbb',background:'#f5f5f5',borderRadius:'6px',padding:'3px 8px'}}>🏋️ Entreno: ~{todayBurned.workoutCal} kcal</div>}
                 </div>
               </div>
