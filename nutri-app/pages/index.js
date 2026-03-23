@@ -32,6 +32,9 @@ const MICROS = [
 
 const DEFAULT_GOALS = { calories: 2200, protein: 170, carbs: 220, fat: 70, fiber: 30 }
 
+// Mifflin-St Jeor: 49 años, 88 kg, 183 cm, hombre
+const BMR = Math.round(10 * 88 + 6.25 * 183 - 5 * 49 + 5) // 1784 kcal/día
+
 const WORKOUT_INTENSITIES = [
   {key:'baja', label:'Baja',  kcalPerMin:4,  color:'#1D9E75'},
   {key:'media',label:'Media', kcalPerMin:7,  color:'#EF9F27'},
@@ -831,6 +834,43 @@ ${['baja','media','alta'].map(k=>{
 
           {/* Entrenamiento */}
           <WorkoutCard fitnessRow={todayFitness} selectedDate={selectedDate} onSave={fetchData}/>
+
+          {/* Balance calórico del día */}
+          {(()=>{
+            const consumed=totals.calories||0
+            const activity=todayBurned.total
+            const balance=Math.round(consumed-BMR-activity)
+            const hasConsumed=consumed>0
+            const balColor=balance<0?'#1D9E75':balance<200?'#EF9F27':'#E24B4A'
+            const balLabel=balance<0?'Déficit':'Superávit'
+            return(
+              <div style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px 16px',marginBottom:'14px'}}>
+                <div style={{fontSize:'13px',fontWeight:'600',color:'#1a1a2e',marginBottom:'12px'}}>⚡ Balance calórico del día</div>
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px',marginBottom:'12px'}}>
+                  <div style={{textAlign:'center',background:'#fafafa',borderRadius:'10px',padding:'10px 6px'}}>
+                    <div style={{fontSize:'11px',color:'#aaa',marginBottom:'4px'}}>Ingesta</div>
+                    <div style={{fontSize:'18px',fontWeight:'700',color:hasConsumed?'#E24B4A':'#ccc',lineHeight:1}}>{hasConsumed?Math.round(consumed):'—'}</div>
+                    <div style={{fontSize:'9px',color:'#ccc',marginTop:'2px'}}>kcal</div>
+                  </div>
+                  <div style={{textAlign:'center',background:'#fafafa',borderRadius:'10px',padding:'10px 6px'}}>
+                    <div style={{fontSize:'11px',color:'#aaa',marginBottom:'4px'}}>Basal + actividad</div>
+                    <div style={{fontSize:'18px',fontWeight:'700',color:'#378ADD',lineHeight:1}}>{BMR+activity}</div>
+                    <div style={{fontSize:'9px',color:'#ccc',marginTop:'2px'}}>{BMR} + {activity} kcal</div>
+                  </div>
+                  <div style={{textAlign:'center',background:hasConsumed?balColor+'12':'#fafafa',borderRadius:'10px',padding:'10px 6px',border:hasConsumed?`1px solid ${balColor}30`:'none'}}>
+                    <div style={{fontSize:'11px',color:'#aaa',marginBottom:'4px'}}>{hasConsumed?balLabel:'Balance'}</div>
+                    <div style={{fontSize:'18px',fontWeight:'700',color:hasConsumed?balColor:'#ccc',lineHeight:1}}>{hasConsumed?(balance>0?'+':'')+balance:'—'}</div>
+                    <div style={{fontSize:'9px',color:'#ccc',marginTop:'2px'}}>kcal</div>
+                  </div>
+                </div>
+                <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+                  <div style={{fontSize:'10px',color:'#bbb',background:'#f5f5f5',borderRadius:'6px',padding:'3px 8px'}}>🔥 Basal: {BMR} kcal</div>
+                  {todayBurned.stepCal>0&&<div style={{fontSize:'10px',color:'#bbb',background:'#f5f5f5',borderRadius:'6px',padding:'3px 8px'}}>👟 Pasos: ~{todayBurned.stepCal} kcal</div>}
+                  {todayBurned.workoutCal>0&&<div style={{fontSize:'10px',color:'#bbb',background:'#f5f5f5',borderRadius:'6px',padding:'3px 8px'}}>🏋️ Entreno: ~{todayBurned.workoutCal} kcal</div>}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Macros */}
           <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'8px'}}>💊 Macros</div>
