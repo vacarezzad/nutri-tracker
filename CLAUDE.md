@@ -48,6 +48,15 @@ La Edge Function devuelve:
 }
 ```
 
+### Micronutrientes (columnas opcionales por comida, snake_case)
+Corazón / DASH: `sodium`, `potassium`, `magnesium`, `calcium`, `cholesterol` (mg) · `sat_fat`, `trans_fat`, `mono_fat`, `poly_fat`, `omega3`, `added_sugar`, `sugar` (g)
+Vitaminas y minerales: `iron`, `zinc`, `vitamin_c`, `vitamin_e` (mg) · `selenium`, `vitamin_a`, `vitamin_d`, `vitamin_k`, `vitamin_b12`, `folate` (µg)
+
+Un micro sin valor (null / ausente) se muestra como "Sin datos" y no cuenta en el score. Varias filas de la misma comida en el mismo día se suman.
+
+### Metas
+Las metas se configuran desde el tab **Metas** y se guardan en `localStorage` (`nutri_goals_v1`). El objeto `goals` de la API se ignora. Defaults: `DEFAULT_GOALS` (macros) y `goal` de cada item de `MICROS`.
+
 ### Campo `meal` — valores válidos
 `desayuno` | `postEntreno` | `almuerzo` | `merienda` | `cena` | `colaciones`
 
@@ -55,6 +64,7 @@ La Edge Function devuelve:
 
 - `MEALS` — array con key, label, icon y color de cada comida
 - `MACROS` — array con key, label, unit, color, goalKey y heatColors
+- `MICROS` — array con key, label, unit, color, goal, type (`max`/`min`/`target`/`info`) y group (`heart`/`vit`)
 - `DEFAULT_GOALS` — objetivos por defecto si la API no devuelve goals
 - `SUPABASE_FN` — URL de la Edge Function
 
@@ -64,7 +74,7 @@ La Edge Function devuelve:
 - Estilos inline (sin CSS modules ni Tailwind)
 - Componentes SVG: `LineChart` (tab semana), `WeekBarChart` (tab mes)
 - Helpers puros: `buildDayMap`, `getDayTotals`, `getWeekBuckets`, `getWeekDayAvg`, `getMealMonthAvgs`
-- Fechas siempre en formato `YYYY-MM-DD`
+- Fechas siempre en formato `YYYY-MM-DD`, en hora local (usar `dateStr()`, nunca `toISOString()`)
 
 ## Comandos útiles
 

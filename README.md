@@ -95,13 +95,13 @@ El proyecto está configurado para deploy automático desde este repo.
 
 | Macro | Objetivo |
 |-------|---------|
-| Calorías | 2200 kcal |
-| Proteínas | 170 g |
-| Carbohidratos | 220 g |
+| Calorías | 2100 kcal |
+| Proteínas | 150 g |
+| Carbohidratos | 215 g |
 | Grasas | 70 g |
 | Fibra | 30 g |
 
-Los objetivos se sobreescriben dinámicamente si la Edge Function devuelve un objeto `goals`.
+Todas las metas (macros y micronutrientes) se configuran desde el tab **⚙ Metas** y se guardan en el navegador.
 
 ---
 
