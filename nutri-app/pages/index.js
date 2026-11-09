@@ -20,17 +20,61 @@ const MACROS = [
   { key: 'fiber',    label: 'Fibra',     unit: 'g',    color: '#1D9E75', goalKey: 'fiber',    heatColors: ['#E1F5EE','#9FE1CB','#5DCAA5','#1D9E75','#085041'] },
 ]
 
-// type: 'max' = no pasar de X | 'min' = llegar a X | 'target' = apuntar a X
+// type: 'max' = no pasar de X | 'min' = llegar a X | 'target' = apuntar a X | 'info' = sólo informativo (sin meta)
+// group: 'heart' = corazón / DASH (se muestra también por comida) | 'vit' = vitaminas y minerales
+// Las keys son snake_case y deben coincidir con las columnas de la tabla de comidas en Supabase.
 const MICROS = [
-  { key: 'sodium',    label: 'Sodio',       unit: 'mg', color: '#F97316', goal: 2300, type: 'max'    },
-  { key: 'potassium', label: 'Potasio',     unit: 'mg', color: '#8B5CF6', goal: 3500, type: 'min'    },
-  { key: 'sugar',     label: 'Azúcares',    unit: 'g',  color: '#EC4899', goal: 50,   type: 'max'    },
-  { key: 'sat_fat',   label: 'G. Saturadas',unit: 'g',  color: '#DC2626', goal: 22,   type: 'max'    },
-  { key: 'mono_fat',  label: 'G. Mono.',    unit: 'g',  color: '#059669', goal: 30,   type: 'target' },
-  { key: 'poly_fat',  label: 'G. Poli.',    unit: 'g',  color: '#0284C7', goal: 15,   type: 'target' },
+  { key: 'sodium',      label: 'Sodio',         unit: 'mg', color: '#F97316', goal: 1500, type: 'max',  group: 'heart' },
+  { key: 'potassium',   label: 'Potasio',       unit: 'mg', color: '#8B5CF6', goal: 4700, type: 'min',  group: 'heart' },
+  { key: 'magnesium',   label: 'Magnesio',      unit: 'mg', color: '#0D9488', goal: 500,  type: 'min',  group: 'heart' },
+  { key: 'calcium',     label: 'Calcio',        unit: 'mg', color: '#64748B', goal: 1250, type: 'min',  group: 'heart' },
+  { key: 'cholesterol', label: 'Colesterol',    unit: 'mg', color: '#B45309', goal: 150,  type: 'max',  group: 'heart' },
+  { key: 'sat_fat',     label: 'G. Saturadas',  unit: 'g',  color: '#DC2626', goal: 14,   type: 'max',  group: 'heart' },
+  { key: 'trans_fat',   label: 'G. Trans',      unit: 'g',  color: '#991B1B', goal: 2,    type: 'max',  group: 'heart' },
+  { key: 'mono_fat',    label: 'G. Mono.',      unit: 'g',  color: '#059669', goal: 30,   type: 'min',  group: 'heart' },
+  { key: 'poly_fat',    label: 'G. Poli.',      unit: 'g',  color: '#0284C7', goal: 15,   type: 'min',  group: 'heart' },
+  { key: 'omega3',      label: 'Omega-3',       unit: 'g',  color: '#2563EB', goal: 1.6,  type: 'min',  group: 'heart' },
+  { key: 'added_sugar', label: 'Az. añadidos',  unit: 'g',  color: '#DB2777', goal: 36,   type: 'max',  group: 'heart' },
+  { key: 'sugar',       label: 'Azúcares tot.', unit: 'g',  color: '#EC4899', goal: null, type: 'info', group: 'heart' },
+  { key: 'iron',        label: 'Hierro',        unit: 'mg', color: '#7C2D12', goal: 8,    type: 'min',  group: 'vit' },
+  { key: 'zinc',        label: 'Zinc',          unit: 'mg', color: '#475569', goal: 11,   type: 'min',  group: 'vit' },
+  { key: 'selenium',    label: 'Selenio',       unit: 'µg', color: '#A16207', goal: 55,   type: 'min',  group: 'vit' },
+  { key: 'vitamin_a',   label: 'Vitamina A',    unit: 'µg', color: '#EA580C', goal: 900,  type: 'min',  group: 'vit' },
+  { key: 'vitamin_c',   label: 'Vitamina C',    unit: 'mg', color: '#F59E0B', goal: 90,   type: 'min',  group: 'vit' },
+  { key: 'vitamin_d',   label: 'Vitamina D',    unit: 'µg', color: '#CA8A04', goal: 15,   type: 'min',  group: 'vit' },
+  { key: 'vitamin_e',   label: 'Vitamina E',    unit: 'mg', color: '#65A30D', goal: 15,   type: 'min',  group: 'vit' },
+  { key: 'vitamin_k',   label: 'Vitamina K',    unit: 'µg', color: '#15803D', goal: 120,  type: 'min',  group: 'vit' },
+  { key: 'vitamin_b12', label: 'Vitamina B12',  unit: 'µg', color: '#BE185D', goal: 2.4,  type: 'min',  group: 'vit' },
+  { key: 'folate',      label: 'Folato',        unit: 'µg', color: '#4D7C0F', goal: 400,  type: 'min',  group: 'vit' },
+]
+const MICRO_GROUPS = [
+  { key: 'heart', label: '❤️ Corazón (DASH)' },
+  { key: 'vit',   label: '🔬 Vitaminas y minerales' },
 ]
 
-const DEFAULT_GOALS = { calories: 2200, protein: 170, carbs: 220, fat: 70, fiber: 30 }
+// Metas por defecto de macros. Se pueden cambiar desde el tab "Metas" (se guardan en este navegador).
+const DEFAULT_GOALS = { calories: 2100, protein: 150, carbs: 215, fat: 70, fiber: 30 }
+const GOALS_STORAGE_KEY = 'nutri_goals_v1'
+
+// Devuelve la lista de micros con la meta configurada por el usuario (o la meta por defecto)
+function microsWithGoals(goals) {
+  return MICROS.map(m => {
+    const g = goals && goals[m.key]
+    return (m.type !== 'info' && Number(g) > 0) ? { ...m, goal: Number(g) } : m
+  })
+}
+function loadSavedGoals() {
+  try {
+    const raw = window.localStorage.getItem(GOALS_STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch (e) { return null }
+}
+function saveGoals(goals) {
+  try { window.localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify(goals)); return true } catch (e) { return false }
+}
+function clearSavedGoals() {
+  try { window.localStorage.removeItem(GOALS_STORAGE_KEY) } catch (e) {}
+}
 
 // Mifflin-St Jeor: 49 años, 88 kg, 183 cm, hombre
 const BMR = Math.round(10 * 88 + 6.25 * 183 - 5 * 49 + 5) // 1784 kcal/día
@@ -44,9 +88,18 @@ const WORKOUT_INTENSITIES = [
 const DAY_NAMES_LONG = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb']
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
-function todayStr() { return new Date().toISOString().split('T')[0] }
+// Fecha local YYYY-MM-DD (no UTC: en Argentina, después de las 21 h toISOString ya da el día siguiente)
+function dateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+function todayStr() { return dateStr(new Date()) }
 function getLast7() {
-  return Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-(6-i)); return d.toISOString().split('T')[0] })
+  return Array.from({length:7},(_,i)=>{ const d=new Date(); d.setDate(d.getDate()-(6-i)); return dateStr(d) })
+}
+// Valores chicos (ej. B12 2.4 µg, omega-3 1.6 g) con un decimal; el resto redondeado
+function fmtMicro(v) {
+  const n=Number(v)||0
+  return n<10?String(Math.round(n*10)/10):String(Math.round(n))
 }
 function getDaysInMonth(y,m) { return new Date(y,m+1,0).getDate() }
 function fmtShort(str) {
@@ -55,8 +108,29 @@ function fmtShort(str) {
 }
 function buildDayMap(meals) {
   const map={}
-  ;(meals||[]).forEach(m=>{ if(!map[m.date])map[m.date]={}; map[m.date][m.meal]=m })
+  ;(meals||[]).forEach(m=>{
+    if(!map[m.date])map[m.date]={}
+    const prev=map[m.date][m.meal]
+    if(!prev){ map[m.date][m.meal]={...m}; return }
+    // Varios registros de la misma comida en el mismo día: se suman (antes el último pisaba al anterior)
+    const merged={...prev}
+    Object.keys(m).forEach(k=>{
+      if(k==='date'||k==='meal')return
+      if(k==='food'){ merged.food=[prev.food,m.food].filter(Boolean).join(' + '); return }
+      const a=prev[k],b=m[k]
+      const aNum=a!==null&&a!==undefined&&a!==''&&!isNaN(Number(a))
+      const bNum=b!==null&&b!==undefined&&b!==''&&!isNaN(Number(b))
+      if(aNum||bNum){ merged[k]=(aNum?Number(a):0)+(bNum?Number(b):0); return }
+      if(merged[k]===undefined||merged[k]===null)merged[k]=b
+    })
+    map[m.date][m.meal]=merged
+  })
   return map
+}
+// Qué micros tienen dato cargado (aunque sea 0) en alguna comida del día
+function getDayMicroPresence(dayMap,date) {
+  const dm=dayMap[date]||{}
+  return MICROS.reduce((acc,m)=>{ acc[m.key]=MEALS.some(meal=>{ const v=dm[meal.key]?.[m.key]; return v!==null&&v!==undefined&&v!=='' }); return acc },{})
 }
 function getDayTotals(dayMap,date) {
   const dm=dayMap[date]||{}
@@ -68,6 +142,7 @@ function getDayMicroTotals(dayMap,date) {
 }
 function microStatusColor(value,goal,type) {
   if(!value)return'#ccc'
+  if(type==='info'||!goal)return'#888'
   const r=value/goal
   if(type==='max'){
     if(r<0.75)return'#1D9E75'
@@ -120,27 +195,29 @@ function getMealMonthAvgs(dayMap,year,month) {
     return{...meal,count:n,avgs}
   })
 }
-function calcDayScore(totals,microTotals,goals) {
+function calcDayScore(totals,microTotals,goals,micros,presence) {
   const hasMacros=MACROS.some(m=>(totals[m.key]||0)>0)
   if(!hasMacros)return null
   const macroScores=MACROS.map(m=>{
     const val=totals[m.key]||0,goal=goals[m.goalKey]||DEFAULT_GOALS[m.goalKey]
     if(!val)return 0
-    if(m.key==='fiber'){const r=val/goal;return r>=1?1:r>=0.8?0.8:r>=0.6?0.5:r*0.5}
+    // Proteína y fibra: lo importante es llegar (pasarse un poco no penaliza)
+    if(m.key==='fiber'||m.key==='protein'){const r=val/goal;return r>=1?1:r>=0.9?0.9:r>=0.8?0.7:r>=0.6?0.4:r*0.4}
     const dev=Math.abs(val/goal-1)
     return dev<=0.1?1:dev<=0.2?0.8:dev<=0.3?0.6:dev<=0.5?0.3:0.1
   })
   const macroScore=macroScores.reduce((a,b)=>a+b,0)/MACROS.length*70
-  const hasMicros=MICROS.some(m=>(microTotals[m.key]||0)>0)
-  const microScores=MICROS.map(m=>{
+  // Sólo cuentan los micros con dato cargado ese día (sin dato ≠ 0) y con meta
+  const scored=micros.filter(m=>m.type!=='info'&&m.goal&&presence[m.key])
+  if(!scored.length)return Math.round(macroScore+15)
+  const microScores=scored.map(m=>{
     const val=microTotals[m.key]||0
-    if(!val)return hasMicros?0:0.5
     const r=val/m.goal
     if(m.type==='max')return r<=0.75?1:r<=0.9?0.8:r<=1?0.5:Math.max(0,1-(r-1))
     if(m.type==='min')return r>=1?1:r>=0.75?0.7:r*0.7
     const dev=Math.abs(r-1);return dev<=0.1?1:dev<=0.25?0.75:dev<=0.5?0.5:0.2
   })
-  const microScore=microScores.reduce((a,b)=>a+b,0)/MICROS.length*30
+  const microScore=microScores.reduce((a,b)=>a+b,0)/scored.length*30
   return Math.round(macroScore+microScore)
 }
 function scoreGrade(score) {
@@ -152,18 +229,18 @@ function scoreGrade(score) {
 }
 function calcStreak(dayMap) {
   const d=new Date()
-  const ts=d.toISOString().split('T')[0]
+  const ts=dateStr(d)
   if(!dayMap[ts]||!Object.keys(dayMap[ts]).length)d.setDate(d.getDate()-1)
   let streak=0
   for(let i=0;i<365;i++){
-    const ds=d.toISOString().split('T')[0]
+    const ds=dateStr(d)
     if(dayMap[ds]&&Object.keys(dayMap[ds]).length>0){streak++;d.setDate(d.getDate()-1)}
     else break
   }
   return streak
 }
 function getPeriodWeeks(dayMap,days) {
-  const dates=Array.from({length:days},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(days-1-i));return d.toISOString().split('T')[0]})
+  const dates=Array.from({length:days},(_,i)=>{const d=new Date();d.setDate(d.getDate()-(days-1-i));return dateStr(d)})
   const weeks=[]
   for(let i=0;i<dates.length;i+=7){
     const chunk=dates.slice(i,i+7)
@@ -180,7 +257,7 @@ function getPeriodWeekMacro(dayMap,periodWeeks,macroKey) {
 }
 function getPeriodAdherence(dayMap,days) {
   let logged=0
-  for(let i=0;i<days;i++){const d=new Date();d.setDate(d.getDate()-i);const ds=d.toISOString().split('T')[0];if(dayMap[ds]&&Object.keys(dayMap[ds]).length>0)logged++}
+  for(let i=0;i<days;i++){const d=new Date();d.setDate(d.getDate()-i);const ds=dateStr(d);if(dayMap[ds]&&Object.keys(dayMap[ds]).length>0)logged++}
   return Math.round((logged/days)*100)
 }
 function estimateStepCal(steps){return Math.round((steps||0)*0.04)}
@@ -195,36 +272,51 @@ function getFitnessBurned(fr){
   return{stepCal,workoutCal,total:stepCal+workoutCal}
 }
 
-function MicrosGrid({microTotals}) {
+function MicroTile({m,val,compact}) {
+  const hasGoal=m.type!=='info'&&m.goal
+  const pct=val>0&&hasGoal?Math.min(Math.round((val/m.goal)*100),999):0
+  const sc=microStatusColor(val,m.goal,m.type)
+  const barPct=hasGoal?Math.min((val/m.goal)*100,100):(val>0?100:0)
+  const typeLabel=m.type==='max'?'límite':m.type==='min'?'mínimo':'objetivo'
+  const note=val>0?(hasGoal?`${pct}% del ${typeLabel}`:'referencia'):'Sin datos'
+  return(
+    <div style={{background:compact?'#fafafa':'white',borderRadius:compact?'10px':'12px',border:`0.5px solid ${compact?'#f0f0f0':'#e8e8e8'}`,padding:compact?'8px 10px':'10px 12px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'4px',gap:'4px'}}>
+        <div style={{fontSize:'10px',fontWeight:'600',color:'#555'}}>{m.label}</div>
+        <div style={{fontSize:'9px',color:'#bbb',whiteSpace:'nowrap'}}>{hasGoal?`${m.type==='max'?'≤':'≥'}${m.goal}${m.unit}`:''}</div>
+      </div>
+      <div style={{fontSize:compact?'15px':'17px',fontWeight:'600',color:val>0?sc:'#ccc',lineHeight:1}}>
+        {val>0?fmtMicro(val):'—'}<span style={{fontSize:'10px',fontWeight:'400',color:'#bbb'}}> {m.unit}</span>
+      </div>
+      <div style={{background:'#ececec',borderRadius:'4px',height:compact?'3px':'4px',marginTop:'6px'}}>
+        <div style={{background:val>0?sc:'#ececec',borderRadius:'4px',height:compact?'3px':'4px',width:`${barPct}%`,transition:'width 0.6s ease'}}/>
+      </div>
+      <div style={{fontSize:'9px',color:val>0?sc:'#ccc',marginTop:'3px',fontWeight:'500'}}>{note}</div>
+    </div>
+  )
+}
+
+// Grilla de micros agrupada (Corazón / Vitaminas y minerales). items: [{...micro, val}]
+function MicroGroups({items,compact,cols}) {
+  return MICRO_GROUPS.map(g=>{
+    const list=items.filter(m=>m.group===g.key)
+    if(!list.length)return null
+    return(
+      <div key={g.key} style={{marginBottom:'12px'}}>
+        <div style={{fontSize:'11px',fontWeight:'600',color:'#888',marginBottom:'6px'}}>{g.label}</div>
+        <div style={{display:'grid',gridTemplateColumns:`repeat(auto-fill,minmax(${cols||110}px,1fr))`,gap:'8px'}}>
+          {list.map(m=><MicroTile key={m.key} m={m} val={m.val||0} compact={compact}/>)}
+        </div>
+      </div>
+    )
+  })
+}
+
+function MicrosGrid({micros,microTotals}) {
   return (
     <div style={{marginBottom:'14px'}}>
-      <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'8px'}}>🔬 Micros</div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:'8px'}}>
-        {MICROS.map(m=>{
-          const val=microTotals[m.key]||0
-          const pct=val>0?Math.min(Math.round((val/m.goal)*100),150):0
-          const sc=microStatusColor(val,m.goal,m.type)
-          const barPct=Math.min((val/m.goal)*100,100)
-          const typeLabel=m.type==='max'?'límite':m.type==='min'?'mínimo':'objetivo'
-          return(
-            <div key={m.key} style={{background:'white',borderRadius:'12px',border:'0.5px solid #e8e8e8',padding:'10px 12px'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'4px'}}>
-                <div style={{fontSize:'10px',fontWeight:'600',color:'#555'}}>{m.label}</div>
-                <div style={{fontSize:'9px',color:'#bbb'}}>{m.goal}{m.unit}</div>
-              </div>
-              <div style={{fontSize:'17px',fontWeight:'600',color:val>0?sc:'#ccc',lineHeight:1}}>
-                {val>0?Math.round(val):'—'}<span style={{fontSize:'10px',fontWeight:'400',color:'#bbb'}}> {m.unit}</span>
-              </div>
-              <div style={{background:'#f0f0f0',borderRadius:'4px',height:'4px',marginTop:'6px'}}>
-                <div style={{background:val>0?sc:'#f0f0f0',borderRadius:'4px',height:'4px',width:`${barPct}%`,transition:'width 0.6s ease'}}/>
-              </div>
-              <div style={{fontSize:'9px',color:val>0?sc:'#ccc',marginTop:'3px',fontWeight:'500'}}>
-                {val>0?`${pct}% del ${typeLabel}`:'Sin datos'}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+      <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'8px'}}>🔬 Micronutrientes</div>
+      <MicroGroups items={micros.map(m=>({...m,val:microTotals[m.key]||0}))}/>
     </div>
   )
 }
@@ -233,32 +325,7 @@ function MicrosSummary({microAvgs,label}) {
   return (
     <div style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px',marginTop:'12px'}}>
       <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'12px'}}>🔬 {label}</div>
-      <div style={{display:'grid',gridTemplateColumns:'repeat(2,minmax(0,1fr))',gap:'8px'}}>
-        {microAvgs.map(m=>{
-          const val=m.avg||0
-          const pct=val>0?Math.min(Math.round((val/m.goal)*100),150):0
-          const sc=microStatusColor(val,m.goal,m.type)
-          const barPct=Math.min((val/m.goal)*100,100)
-          const typeLabel=m.type==='max'?'límite':m.type==='min'?'mínimo':'objetivo'
-          return(
-            <div key={m.key} style={{display:'flex',flexDirection:'column',gap:'4px',padding:'8px 10px',background:'#fafafa',borderRadius:'10px',border:'0.5px solid #f0f0f0'}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline'}}>
-                <div style={{fontSize:'10px',fontWeight:'600',color:'#555'}}>{m.label}</div>
-                <div style={{fontSize:'9px',color:'#bbb'}}>{m.goal}{m.unit}</div>
-              </div>
-              <div style={{fontSize:'15px',fontWeight:'600',color:val>0?sc:'#ccc',lineHeight:1}}>
-                {val>0?Math.round(val):'—'}<span style={{fontSize:'10px',fontWeight:'400',color:'#bbb'}}> {m.unit}</span>
-              </div>
-              <div style={{background:'#e8e8e8',borderRadius:'4px',height:'3px'}}>
-                <div style={{background:val>0?sc:'#e8e8e8',borderRadius:'4px',height:'3px',width:`${barPct}%`,transition:'width 0.6s ease'}}/>
-              </div>
-              <div style={{fontSize:'9px',color:val>0?sc:'#ccc',fontWeight:'500'}}>
-                {val>0?`${pct}% del ${typeLabel}`:'Sin datos'}
-              </div>
-            </div>
-          )
-        })}
-      </div>
+      <MicroGroups items={microAvgs.map(m=>({...m,val:m.avg||0}))} compact/>
     </div>
   )
 }
@@ -524,6 +591,78 @@ function StepsCard({steps,goal,fitnessRow,selectedDate,onSave}) {
   )
 }
 
+function GoalsEditor({goals,onSave,onReset}) {
+  const editable=[
+    {title:'💊 Macros',items:MACROS.map(m=>({key:m.goalKey,label:m.label,unit:m.unit,def:DEFAULT_GOALS[m.goalKey],type:m.key==='protein'||m.key==='fiber'?'min':'target'}))},
+    ...MICRO_GROUPS.map(g=>({title:g.label,items:MICROS.filter(m=>m.group===g.key&&m.type!=='info').map(m=>({key:m.key,label:m.label,unit:m.unit,def:m.goal,type:m.type}))})),
+  ]
+  const toForm=g=>editable.flatMap(sec=>sec.items).reduce((acc,it)=>{ const v=g[it.key]??it.def; acc[it.key]=String(v); return acc },{})
+  const [form,setForm]=useState(()=>toForm(goals))
+  const [msg,setMsg]=useState('')
+  useEffect(()=>{setForm(toForm(goals))},[goals]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const num=k=>Number(String(form[k]).replace(',','.'))
+  const invalid=Object.keys(form).filter(k=>!(num(k)>0))
+  const macroKcal=Math.round((num('protein')||0)*4+(num('carbs')||0)*4+(num('fat')||0)*9)
+  const kcalDiff=macroKcal-(num('calories')||0)
+  const satFatRef=Math.round((num('calories')||0)*0.06/9)
+
+  const save=()=>{
+    if(invalid.length)return
+    const out=Object.keys(form).reduce((acc,k)=>{acc[k]=num(k);return acc},{})
+    const ok=onSave(out)
+    setMsg(ok?'✓ Metas guardadas en este dispositivo':'No se pudo guardar (el navegador bloquea el almacenamiento)')
+    setTimeout(()=>setMsg(''),3000)
+  }
+  const reset=()=>{ onReset(); setMsg('Se restablecieron los valores por defecto'); setTimeout(()=>setMsg(''),3000) }
+  const typeHint=t=>t==='max'?'máximo':t==='min'?'mínimo':'objetivo'
+
+  return(
+    <div>
+      <div style={{fontSize:'13px',color:'#666',marginBottom:'14px',lineHeight:1.5}}>
+        Configurá tus metas diarias. Se guardan en este dispositivo y se usan en todos los tabs, el score y el PDF.
+      </div>
+      {editable.map(sec=>(
+        <div key={sec.title} style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px 16px',marginBottom:'12px'}}>
+          <div style={{fontSize:'13px',fontWeight:'600',color:'#1a1a2e',marginBottom:'10px'}}>{sec.title}</div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(150px,1fr))',gap:'10px'}}>
+            {sec.items.map(it=>{
+              const bad=!(num(it.key)>0)
+              return(
+                <label key={it.key} style={{display:'flex',flexDirection:'column',gap:'4px'}}>
+                  <span style={{fontSize:'11px',fontWeight:'600',color:'#555'}}>{it.label} <span style={{fontWeight:'400',color:'#bbb'}}>({typeHint(it.type)})</span></span>
+                  <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                    <input type="text" inputMode="decimal" value={form[it.key]} onChange={e=>setForm(f=>({...f,[it.key]:e.target.value.replace(/[^0-9.,]/g,'')}))}
+                      style={{flex:1,minWidth:0,border:`0.5px solid ${bad?'#E24B4A':'#e0e0e0'}`,borderRadius:'8px',padding:'7px 10px',fontSize:'13px',fontFamily:'inherit',outline:'none',color:'#333'}}/>
+                    <span style={{fontSize:'11px',color:'#bbb',width:'30px'}}>{it.unit}</span>
+                  </div>
+                  <span style={{fontSize:'9px',color:'#ccc'}}>Por defecto: {it.def}{it.unit}</span>
+                </label>
+              )
+            })}
+          </div>
+          {sec.title.includes('Macros')&&(
+            <div style={{fontSize:'10px',color:Math.abs(kcalDiff)>100?'#EF9F27':'#aaa',marginTop:'10px'}}>
+              Proteína×4 + carbos×4 + grasas×9 = {macroKcal} kcal ({kcalDiff>=0?'+':''}{kcalDiff} vs meta de calorías)
+            </div>
+          )}
+          {sec.title.includes('DASH')&&(
+            <div style={{fontSize:'10px',color:'#aaa',marginTop:'10px'}}>
+              Referencia DASH para saturadas: ≤6% de las calorías ≈ {satFatRef} g con tu meta actual.
+            </div>
+          )}
+        </div>
+      ))}
+      <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
+        <button onClick={save} disabled={!!invalid.length} style={{padding:'9px 22px',borderRadius:'8px',border:'none',background:invalid.length?'#f0f0f0':'#1a1a2e',color:invalid.length?'#bbb':'white',cursor:invalid.length?'default':'pointer',fontSize:'12px',fontWeight:'500',fontFamily:'inherit'}}>Guardar metas</button>
+        <button onClick={reset} style={{padding:'9px 16px',borderRadius:'8px',border:'0.5px solid #e0e0e0',background:'white',color:'#666',cursor:'pointer',fontSize:'12px',fontFamily:'inherit'}}>Restablecer por defecto</button>
+        {msg&&<span style={{fontSize:'11px',color:'#1D9E75'}}>{msg}</span>}
+        {invalid.length>0&&<span style={{fontSize:'11px',color:'#E24B4A'}}>Revisá los campos en rojo (deben ser mayores a 0)</span>}
+      </div>
+    </div>
+  )
+}
+
 export default function Home() {
   const [rawMeals,setRawMeals]=useState([])
   const [goals,setGoals]=useState(DEFAULT_GOALS)
@@ -539,13 +678,15 @@ export default function Home() {
       const res=await fetch(SUPABASE_FN)
       const data=await res.json()
       setRawMeals(data.meals||[])
-      if(data.goals)setGoals(data.goals)
+      // Las metas ahora se configuran desde la app (tab Metas); se ignoran las goals de la API
       setRawFitness(data.fitness||[])
     }catch(e){}
     setLoading(false)
   }
 
   useEffect(()=>{
+    const saved=loadSavedGoals()
+    if(saved)setGoals({...DEFAULT_GOALS,...saved})
     fetchData()
     const iv=setInterval(fetchData,30000)
     return()=>clearInterval(iv)
@@ -553,8 +694,10 @@ export default function Home() {
 
   const today=todayStr(),last7=getLast7(),dayMap=buildDayMap(rawMeals)
   const dayMeals=dayMap[selectedDate]||{},totals=getDayTotals(dayMap,selectedDate)
+  const micros=microsWithGoals(goals)
   const microTotals=getDayMicroTotals(dayMap,selectedDate)
-  const dayScore=calcDayScore(totals,microTotals,goals)
+  const microPresence=getDayMicroPresence(dayMap,selectedDate)
+  const dayScore=calcDayScore(totals,microTotals,goals,micros,microPresence)
   const streak=calcStreak(dayMap)
   const periodWeeks=getPeriodWeeks(dayMap,tendPeriod)
   const periodAdherence=getPeriodAdherence(dayMap,tendPeriod)
@@ -583,18 +726,18 @@ export default function Home() {
   const mealAvgs=getMealMonthAvgs(dayMap,heatYear,heatMonth)
 
   // Micro averages — semana
-  const weekMicroAvgs=MICROS.map(m=>{
+  const weekMicroAvgs=micros.map(m=>{
     const vals=last7.map(d=>getDayMicroTotals(dayMap,d)[m.key]||0).filter(v=>v>0)
-    return{...m,avg:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0}
+    return{...m,avg:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*10)/10:0}
   })
 
   // Micro averages — mes
-  const monthMicroAvgs=MICROS.map(m=>{
+  const monthMicroAvgs=micros.map(m=>{
     const vals=Array.from({length:daysInHeatMonth},(_,i)=>{
       const d=`${heatYear}-${String(heatMonth+1).padStart(2,'0')}-${String(i+1).padStart(2,'0')}`
       return getDayMicroTotals(dayMap,d)[m.key]||0
     }).filter(v=>v>0)
-    return{...m,avg:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0}
+    return{...m,avg:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*10)/10:0}
   })
 
   const weekCalBalance=(()=>{
@@ -626,7 +769,7 @@ export default function Home() {
     const calGoal=goals.calories||DEFAULT_GOALS.calories
     // Build last 30 days array
     const last30=[]
-    for(let i=29;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);last30.push(d.toISOString().slice(0,10))}
+    for(let i=29;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);last30.push(dateStr(d))}
     const dateFrom=last30[0],dateTo=last30[last30.length-1]
 
     // Macro averages (days with data only)
@@ -638,10 +781,10 @@ export default function Home() {
     })
 
     // Micro averages
-    const microAvgs=MICROS.map(m=>{
+    const microAvgs=micros.map(m=>{
       const vals=last30.map(d=>getDayMicroTotals(dayMap,d)[m.key]||0).filter(v=>v>0)
-      const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0
-      return{...m,avg,pct:avg>0?Math.round((avg/m.goal)*100):0}
+      const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*10)/10:0
+      return{...m,avg,pct:avg>0&&m.goal?Math.round((avg/m.goal)*100):0}
     })
 
     // Steps summary
@@ -706,11 +849,11 @@ ${macroAvgs.map(m=>{
 <h2>🔬 Micros — promedio diario (últimos 30 días)</h2>
 <table><tr><th>Micro</th><th>Promedio</th><th>Referencia</th><th>%</th><th>Tipo</th><th>Estado</th></tr>
 ${microAvgs.map(m=>{
-  const typeLabel=m.type==='max'?'Máximo':m.type==='min'?'Mínimo':'Objetivo'
+  const typeLabel=m.type==='max'?'Máximo':m.type==='min'?'Mínimo':m.type==='info'?'Informativo':'Objetivo'
   const sc=microStatusColor(m.avg,m.goal,m.type)
-  const cl=sc==='#1D9E75'?'ok':sc==='#EF9F27'||sc==='#F97316'?'warn':'bad'
-  const st=m.avg===0?'Sin datos':m.type==='max'?(m.avg<=m.goal?'✓ Dentro del límite':'⚠ Excede límite'):m.type==='min'?(m.avg>=m.goal?'✓ Alcanza mínimo':'⚠ Bajo mínimo'):(Math.abs(m.avg/m.goal-1)<=0.1?'✓ En objetivo':'⚠ Fuera de rango')
-  return`<tr><td><strong>${m.label}</strong></td><td>${m.avg>0?m.avg+' '+m.unit:'—'}</td><td>${m.goal} ${m.unit}</td><td>${m.avg>0?m.pct+'%':'—'}</td><td>${typeLabel}</td><td class="${cl}">${st}</td></tr>`
+  const cl=m.type==='info'||m.avg===0?'':sc==='#1D9E75'?'ok':sc==='#EF9F27'||sc==='#F97316'?'warn':'bad'
+  const st=m.avg===0?'Sin datos':m.type==='info'?'—':m.type==='max'?(m.avg<=m.goal?'✓ Dentro del límite':'⚠ Excede límite'):m.type==='min'?(m.avg>=m.goal?'✓ Alcanza mínimo':'⚠ Bajo mínimo'):(Math.abs(m.avg/m.goal-1)<=0.1?'✓ En objetivo':'⚠ Fuera de rango')
+  return`<tr><td><strong>${m.label}</strong></td><td>${m.avg>0?fmtMicro(m.avg)+' '+m.unit:'—'}</td><td>${m.goal?m.goal+' '+m.unit:'—'}</td><td>${m.avg>0?m.pct+'%':'—'}</td><td>${typeLabel}</td><td class="${cl}">${st}</td></tr>`
 }).join('')}
 </table>
 
@@ -791,7 +934,7 @@ ${['baja','media','alta'].map(k=>{
             </div>
           </div>
           <div style={{display:'flex',gap:'4px'}}>
-            {[{id:'hoy',label:'Hoy'},{id:'semana',label:'Semana'},{id:'mes',label:'Mes'},{id:'tendencias',label:'Tendencias'}].map(t=>(
+            {[{id:'hoy',label:'Hoy'},{id:'semana',label:'Semana'},{id:'mes',label:'Mes'},{id:'tendencias',label:'Tendencias'},{id:'metas',label:'⚙ Metas'}].map(t=>(
               <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:'10px 18px',border:'none',cursor:'pointer',fontFamily:'inherit',fontSize:'13px',fontWeight:'500',borderRadius:'8px 8px 0 0',background:tab===t.id?'#f8f9fc':'transparent',color:tab===t.id?'#1a1a2e':'rgba(255,255,255,0.5)'}}>{t.label}</button>
             ))}
           </div>
@@ -899,7 +1042,7 @@ ${['baja','media','alta'].map(k=>{
           </div>
 
           {/* Micros */}
-          <MicrosGrid microTotals={microTotals}/>
+          <MicrosGrid micros={micros} microTotals={microTotals}/>
 
           {/* Comidas */}
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(260px,1fr))',gap:'10px'}}>
@@ -919,18 +1062,25 @@ ${['baja','media','alta'].map(k=>{
                     </div>
                   ))}
                 </div>
+{(()=>{
+                  // Sólo los micros que vienen cargados en esta comida
+                  const withData=micros.filter(m=>data[m.key]!==null&&data[m.key]!==undefined&&data[m.key]!=='')
+                  if(!withData.length)return null
+                  return(
                 <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'3px',paddingTop:'6px',borderTop:'0.5px solid #f0f0f0'}}>
-                  {MICROS.map(m=>{
+                  {withData.map(m=>{
                     const val=Number(data[m.key])||0
                     const sc=microStatusColor(val,m.goal,m.type)
                     return(
                       <div key={m.key} style={{background:'#fafafa',borderRadius:'5px',padding:'3px 4px',textAlign:'center'}}>
-                        <div style={{fontSize:'10px',fontWeight:'600',color:val>0?sc:'#ccc',lineHeight:1.2}}>{val>0?Math.round(val):'—'}<span style={{fontSize:'8px',fontWeight:'400',color:'#bbb'}}>{m.unit}</span></div>
+                        <div style={{fontSize:'10px',fontWeight:'600',color:val>0?sc:'#ccc',lineHeight:1.2}}>{val>0?fmtMicro(val):'0'}<span style={{fontSize:'8px',fontWeight:'400',color:'#bbb'}}>{m.unit}</span></div>
                         <div style={{fontSize:'8px',color:'#bbb',marginTop:'1px'}}>{m.label}</div>
                       </div>
                     )
                   })}
                 </div>
+                  )
+                })()}
                 </>:<div style={{fontSize:'11px',color:'#ccc',fontStyle:'italic'}}>Todavía no cargaste esta comida</div>}
               </div>)
             })}
@@ -1157,34 +1307,17 @@ ${['baja','media','alta'].map(k=>{
           </div>
 
           {/* Micros trend summary */}
-          <div style={{background:'white',borderRadius:'14px',border:'0.5px solid #e8e8e8',padding:'14px',marginTop:'12px'}}>
-            <div style={{fontSize:'12px',fontWeight:'600',color:'#666',marginBottom:'12px'}}>🔬 Promedio de micros — últimos {tendPeriod}d</div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,minmax(0,1fr))',gap:'8px'}}>
-              {MICROS.map(m=>{
-                const vals=periodWeeks.flatMap(w=>w.dates.map(d=>getDayMicroTotals(dayMap,d)[m.key]||0)).filter(v=>v>0)
-                const avg=vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length):0
-                const sc=microStatusColor(avg,m.goal,m.type)
-                const pct=avg>0?Math.min(Math.round((avg/m.goal)*100),150):0
-                const typeLabel=m.type==='max'?'límite':m.type==='min'?'mínimo':'objetivo'
-                return(
-                  <div key={m.key} style={{background:'#fafafa',borderRadius:'10px',border:'0.5px solid #f0f0f0',padding:'10px'}}>
-                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline',marginBottom:'4px'}}>
-                      <div style={{fontSize:'10px',fontWeight:'600',color:'#555'}}>{m.label}</div>
-                      <div style={{fontSize:'9px',color:'#bbb'}}>{m.goal}{m.unit}</div>
-                    </div>
-                    <div style={{fontSize:'16px',fontWeight:'600',color:avg>0?sc:'#ccc',lineHeight:1,marginBottom:'5px'}}>
-                      {avg>0?avg:'—'}<span style={{fontSize:'10px',fontWeight:'400',color:'#bbb'}}> {m.unit}</span>
-                    </div>
-                    <div style={{background:'#e8e8e8',borderRadius:'4px',height:'3px'}}>
-                      <div style={{background:avg>0?sc:'#e8e8e8',borderRadius:'4px',height:'3px',width:`${Math.min((avg/m.goal)*100,100)}%`,transition:'width 0.6s ease'}}/>
-                    </div>
-                    <div style={{fontSize:'9px',color:avg>0?sc:'#ccc',marginTop:'3px',fontWeight:'500'}}>{avg>0?`${pct}% del ${typeLabel}`:'Sin datos'}</div>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+          <MicrosSummary label={`Promedio de micros — últimos ${tendPeriod}d`} microAvgs={micros.map(m=>{
+            const vals=periodWeeks.flatMap(w=>w.dates.map(d=>getDayMicroTotals(dayMap,d)[m.key]||0)).filter(v=>v>0)
+            return{...m,avg:vals.length?Math.round(vals.reduce((a,b)=>a+b,0)/vals.length*10)/10:0}
+          })}/>
         </>}
+
+        {tab==='metas'&&(
+          <GoalsEditor goals={goals}
+            onSave={g=>{ const merged={...DEFAULT_GOALS,...g}; setGoals(merged); return saveGoals(g) }}
+            onReset={()=>{ clearSavedGoals(); setGoals(DEFAULT_GOALS) }}/>
+        )}
       </div>
     </div>
   )
